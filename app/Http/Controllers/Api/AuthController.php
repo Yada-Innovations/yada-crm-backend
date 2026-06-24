@@ -1,13 +1,12 @@
 <?php
-
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
 
 class AuthController extends Controller
 {
@@ -26,12 +25,8 @@ class AuthController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
-        // Assign role if provided, default to sales_agent
         $roleName = $validated['role'] ?? 'sales_agent';
-        $role = Role::where('name', $roleName)->first();
-        if ($role) {
-            $user->roles()->attach($role->id);
-        }
+        $user->assignRole($roleName);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -62,20 +57,19 @@ class AuthController extends Controller
             ]);
         }
 
-        // Revoke old tokens and issue a fresh one
         $user->tokens()->delete();
         $token = $user->createToken('auth_token')->plainTextToken;
-
-        $role = $user->roles()->first();
+        $role  = $user->getRoleNames()->first();
 
         return response()->json([
             'message' => 'Login successful',
             'token'   => $token,
             'user'    => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-                'role'  => $role?->name,
+                'id'          => $user->id,
+                'name'        => $user->name,
+                'email'       => $user->email,
+                'role'        => $role,
+                'permissions' => $user->getAllPermissions()->pluck('name'),
             ],
         ]);
     }
@@ -83,22 +77,18 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->tokens()->delete();
-
-        return response()->json([
-            'message' => 'Logged out successfully',
-        ]);
+        return response()->json(['message' => 'Logged out successfully']);
     }
 
     public function me(Request $request)
     {
         $user = $request->user();
-        $role = $user->roles()->first();
-
         return response()->json([
-            'id'    => $user->id,
-            'name'  => $user->name,
-            'email' => $user->email,
-            'role'  => $role?->name,
+            'id'          => $user->id,
+            'name'        => $user->name,
+            'email'       => $user->email,
+            'role'        => $user->getRoleNames()->first(),
+            'permissions' => $user->getAllPermissions()->pluck('name'),
         ]);
     }
 }

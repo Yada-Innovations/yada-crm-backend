@@ -21,34 +21,67 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
 
-    // Dashboard
+    // Dashboard — any authenticated user
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
-    // All roles: clients, leads
-    Route::middleware('role:admin,sales_agent,support_agent')->group(function () {
-        Route::apiResource('clients', ClientController::class);
-    });
+    // ── Leads ──
+    Route::get('/leads',            [LeadController::class, 'index'])  ->middleware('permission:leads.view');
+    Route::post('/leads',           [LeadController::class, 'store'])  ->middleware('permission:leads.create');
+    Route::get('/leads/{lead}',     [LeadController::class, 'show'])   ->middleware('permission:leads.view');
+    Route::patch('/leads/{lead}',   [LeadController::class, 'update']) ->middleware('permission:leads.edit');
+    Route::delete('/leads/{lead}',  [LeadController::class, 'destroy'])->middleware('permission:leads.delete');
 
-    // Admin + Sales
-    Route::middleware('role:admin,sales_agent')->group(function () {
-        Route::apiResource('leads',   LeadController::class);
-        Route::apiResource('quotes',  QuoteController::class);
-        Route::apiResource('subscriptions', SubscriptionController::class);
-        Route::get('/subscription-plans', [SubscriptionController::class, 'plans']);
-    });
+    // ── Quotes ──
+    Route::get('/quotes',           [QuoteController::class, 'index'])  ->middleware('permission:quotes.view');
+    Route::post('/quotes',          [QuoteController::class, 'store'])  ->middleware('permission:quotes.create');
+    Route::get('/quotes/{quote}',   [QuoteController::class, 'show'])   ->middleware('permission:quotes.view');
+    Route::patch('/quotes/{quote}', [QuoteController::class, 'update']) ->middleware('permission:quotes.edit');
+    Route::delete('/quotes/{quote}',[QuoteController::class, 'destroy'])->middleware('permission:quotes.delete');
 
-    // Admin + Support
-    Route::middleware('role:admin,support_agent')->group(function () {
-        Route::apiResource('tickets', TicketController::class);
-        Route::apiResource('feature-requests', FeatureRequestController::class);
-        Route::post('/feature-requests/{featureRequest}/vote', [FeatureRequestController::class, 'vote']);
-    });
+    // ── Clients ──
+    Route::get('/clients',              [ClientController::class, 'index'])  ->middleware('permission:clients.view');
+    Route::post('/clients',             [ClientController::class, 'store'])  ->middleware('permission:clients.create');
+    Route::get('/clients/{client}',     [ClientController::class, 'show'])   ->middleware('permission:clients.view');
+    Route::patch('/clients/{client}',   [ClientController::class, 'update']) ->middleware('permission:clients.edit');
+    Route::delete('/clients/{client}',  [ClientController::class, 'destroy'])->middleware('permission:clients.delete');
 
-    // Admin only
-    Route::middleware('role:admin')->group(function () {
-        Route::apiResource('invoices', InvoiceController::class);
-        Route::get('/admin/users', function () {
-            return response()->json(\App\Models\User::with('roles')->get());
-        });
-    });
+    // ── Subscriptions ──
+    Route::get('/subscription-plans',                   [SubscriptionController::class, 'plans'])  ->middleware('permission:subscriptions.view');
+    Route::get('/subscriptions',                        [SubscriptionController::class, 'index'])  ->middleware('permission:subscriptions.view');
+    Route::post('/subscriptions',                       [SubscriptionController::class, 'store'])  ->middleware('permission:subscriptions.create');
+    Route::get('/subscriptions/{subscription}',         [SubscriptionController::class, 'show'])   ->middleware('permission:subscriptions.view');
+    Route::patch('/subscriptions/{subscription}',       [SubscriptionController::class, 'update']) ->middleware('permission:subscriptions.edit');
+    Route::delete('/subscriptions/{subscription}',      [SubscriptionController::class, 'destroy'])->middleware('permission:subscriptions.delete');
+
+    // ── Tickets ──
+    Route::get('/tickets',              [TicketController::class, 'index'])  ->middleware('permission:tickets.view');
+    Route::post('/tickets',             [TicketController::class, 'store'])  ->middleware('permission:tickets.create');
+    Route::get('/tickets/{ticket}',     [TicketController::class, 'show'])   ->middleware('permission:tickets.view');
+    Route::patch('/tickets/{ticket}',   [TicketController::class, 'update']) ->middleware('permission:tickets.edit');
+    Route::delete('/tickets/{ticket}',  [TicketController::class, 'destroy'])->middleware('permission:tickets.delete');
+
+    // ── Feature Requests ──
+    Route::get('/feature-requests',                          [FeatureRequestController::class, 'index'])  ->middleware('permission:feature_requests.view');
+    Route::post('/feature-requests',                         [FeatureRequestController::class, 'store'])  ->middleware('permission:feature_requests.create');
+    Route::get('/feature-requests/{featureRequest}',         [FeatureRequestController::class, 'show'])   ->middleware('permission:feature_requests.view');
+    Route::patch('/feature-requests/{featureRequest}',       [FeatureRequestController::class, 'update']) ->middleware('permission:feature_requests.edit');
+    Route::delete('/feature-requests/{featureRequest}',      [FeatureRequestController::class, 'destroy'])->middleware('permission:feature_requests.delete');
+    Route::post('/feature-requests/{featureRequest}/vote',   [FeatureRequestController::class, 'vote'])   ->middleware('permission:feature_requests.create');
+
+    // ── Invoices (admin only) ──
+    Route::get('/invoices',             [InvoiceController::class, 'index'])  ->middleware('permission:invoices.view');
+    Route::post('/invoices',            [InvoiceController::class, 'store'])  ->middleware('permission:invoices.create');
+    Route::get('/invoices/{invoice}',   [InvoiceController::class, 'show'])   ->middleware('permission:invoices.view');
+    Route::patch('/invoices/{invoice}', [InvoiceController::class, 'update']) ->middleware('permission:invoices.edit');
+    Route::delete('/invoices/{invoice}',[InvoiceController::class, 'destroy'])->middleware('permission:invoices.delete');
+
+    // ── Users (admin only) ──
+    Route::get('/admin/users', function () {
+        return response()->json(\App\Models\User::with('roles')->get());
+    })->middleware('permission:users.view');
+
+    Route::delete('/admin/users/{user}', function (\App\Models\User $user) {
+        $user->delete();
+        return response()->json(['message' => 'User deleted']);
+    })->middleware('permission:users.delete');
 });

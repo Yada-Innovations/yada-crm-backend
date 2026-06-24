@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Middleware;
 
 use Closure;
@@ -15,14 +14,10 @@ class CheckPermission
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $hasPermission = $user->roles()
-            ->whereHas('permissions', function ($q) use ($permission) {
-                $q->where('name', $permission);
-            })->exists();
-
-        if (!$hasPermission) {
+        if (!$user->hasPermissionTo($permission)) {
             return response()->json([
                 'message'    => 'Forbidden. Missing permission: ' . $permission,
+                'permission' => $permission,
             ], 403);
         }
 

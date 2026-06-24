@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Middleware;
 
 use Closure;
@@ -15,18 +14,16 @@ class CheckRole
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $userRoles = $user->roles()->pluck('name')->toArray();
-
         foreach ($roles as $role) {
-            if (in_array($role, $userRoles)) {
+            if ($user->hasRole($role)) {
                 return $next($request);
             }
         }
 
         return response()->json([
-            'message' => 'Forbidden. You do not have the required role.',
-            'required' => $roles,
-            'your_role' => $userRoles,
+            'message'   => 'Forbidden. You do not have the required role.',
+            'required'  => $roles,
+            'your_role' => $user->getRoleNames(),
         ], 403);
     }
 }
