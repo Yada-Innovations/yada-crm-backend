@@ -1,8 +1,10 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use App\Jobs\SendInvoiceExpiryReminders;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+// Run invoice expiry reminder check every day at 8:00 AM
+Schedule::job(new SendInvoiceExpiryReminders)->dailyAt('08:00');
+
+// Also run every hour for testing (remove this in production)
+// Schedule::job(new SendInvoiceExpiryReminders)->hourly();

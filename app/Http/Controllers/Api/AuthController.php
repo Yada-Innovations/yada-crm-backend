@@ -38,6 +38,7 @@ class AuthController extends Controller
                 'name'  => $user->name,
                 'email' => $user->email,
                 'role'  => $roleName,
+                'permissions' => $user->getAllPermissions()->pluck('name'),
             ],
         ], 201);
     }
@@ -77,17 +78,22 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->tokens()->delete();
-        return response()->json(['message' => 'Logged out successfully']);
+
+        return response()->json([
+            'message' => 'Logged out successfully',
+        ]);
     }
 
     public function me(Request $request)
     {
         $user = $request->user();
+        $role = $user->getRoleNames()->first();
+
         return response()->json([
             'id'          => $user->id,
             'name'        => $user->name,
             'email'       => $user->email,
-            'role'        => $user->getRoleNames()->first(),
+            'role'        => $role,
             'permissions' => $user->getAllPermissions()->pluck('name'),
         ]);
     }

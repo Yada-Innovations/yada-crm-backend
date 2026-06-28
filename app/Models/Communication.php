@@ -4,22 +4,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
-class Quote extends Model
+class Communication extends Model
 {
     use HasUuids;
 
     protected $fillable = [
-        'lead_id', 'base_amount', 'discount_pct',
-        'final_amount', 'margin_pct', 'status',
-        'created_by', 'valid_until',
+        'client_id', 'lead_id', 'type', 'direction', 'subject',
+        'content', 'from', 'to', 'status', 'created_by', 'metadata', 'read_at'
     ];
 
     protected $casts = [
-        'base_amount' => 'decimal:2',
-        'final_amount' => 'decimal:2',
-        'discount_pct' => 'decimal:2',
-        'margin_pct' => 'decimal:2',
+        'metadata' => 'array',
+        'read_at' => 'datetime'
     ];
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
 
     public function lead()
     {
