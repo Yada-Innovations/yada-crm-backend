@@ -14,6 +14,10 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\CommunicationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\EmailTemplateController;
+use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\LeaveRequestController;
+use App\Http\Controllers\Api\PayrollController;
 
 // ── Public Routes ──
 Route::prefix('auth')->group(function () {
@@ -107,6 +111,50 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])->middleware('permission:clients.edit');
     Route::delete('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->middleware('permission:clients.delete');
 
+    // ── Employees ──
+    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
+        Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::post('/employees', [EmployeeController::class, 'store'])->middleware('permission:users.create');
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+        Route::patch('/employees/{employee}', [EmployeeController::class, 'update'])->middleware('permission:users.edit');
+        Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:users.delete');
+        Route::get('/employees/stats', [EmployeeController::class, 'stats']);
+    });
+
+    // ── Attendance ──
+    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
+        Route::get('/attendance', [AttendanceController::class, 'index']);
+        Route::post('/attendance', [AttendanceController::class, 'store'])->middleware('permission:users.edit');
+        Route::get('/attendance/{attendance}', [AttendanceController::class, 'show']);
+        Route::patch('/attendance/{attendance}', [AttendanceController::class, 'update'])->middleware('permission:users.edit');
+        Route::delete('/attendance/{attendance}', [AttendanceController::class, 'destroy'])->middleware('permission:users.delete');
+        Route::post('/attendance/bulk-checkin', [AttendanceController::class, 'bulkCheckIn'])->middleware('permission:users.edit');
+        Route::get('/attendance/summary/{employee}', [AttendanceController::class, 'summary']);
+    });
+
+    // ── Leave Requests ──
+    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
+        Route::get('/leave-requests', [LeaveRequestController::class, 'index']);
+        Route::post('/leave-requests', [LeaveRequestController::class, 'store'])->middleware('permission:users.edit');
+        Route::get('/leave-requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
+        Route::patch('/leave-requests/{leaveRequest}', [LeaveRequestController::class, 'update'])->middleware('permission:users.edit');
+        Route::delete('/leave-requests/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->middleware('permission:users.delete');
+        Route::post('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->middleware('permission:users.edit');
+        Route::post('/leave-requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware('permission:users.edit');
+        Route::get('/leave-requests/balance/{employee}', [LeaveRequestController::class, 'balance']);
+    });
+
+    // ── Payroll ──
+    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
+        Route::get('/payroll', [PayrollController::class, 'index']);
+        Route::get('/payroll/calculate/{employee}', [PayrollController::class, 'calculate']);
+        Route::post('/payroll/generate', [PayrollController::class, 'generate'])->middleware('permission:users.edit');
+        Route::get('/payroll/{payroll}', [PayrollController::class, 'show']);
+        Route::patch('/payroll/{payroll}/approve', [PayrollController::class, 'approve'])->middleware('permission:users.edit');
+        Route::patch('/payroll/{payroll}/paid', [PayrollController::class, 'markPaid'])->middleware('permission:users.edit');
+        Route::get('/payroll/summary', [PayrollController::class, 'summary']);
+    });
+
     // ── Admin Routes ──
     Route::middleware(['auth:sanctum', 'permission:users.view'])->prefix('admin')->group(function () {
         
@@ -120,37 +168,74 @@ Route::middleware('auth:sanctum')->group(function () {
             return response()->json(\Spatie\Permission\Models\Role::with('permissions')->get());
         });
         
-        // Update role permissions - FIXED VERSION
-        Route::patch('/roles/{role}/permissions', function (Request $request, $roleId) {
-            // Find role by ID with 'web' guard
-            $role = \Spatie\Permission\Models\Role::where('id', $roleId)
-                ->where('guard_name', 'web')
-                ->first();
-            
-            if (!$role) {
+        // ── Create a new role ──
+        Route::post('/roles', function (Request $request) {
+            try {
+                $data = $request->validate([
+                    'name' => 'required|string|unique:roles,name',
+                    'display_name' => 'nullable|string',
+                    'description' => 'nullable|string',
+                    'permissions' => 'nullable|array',
+                ]);
+
+                $role = \Spatie\Permission\Models\Role::create([
+                    'name' => $data['name'],
+                    'guard_name' => 'web',
+                ]);
+
+                if (!empty($data['permissions'])) {
+                    $role->syncPermissions($data['permissions']);
+                }
+
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
                 return response()->json([
-                    'error' => 'Role not found'
-                ], 404);
+                    'message' => 'Role created successfully',
+                    'role' => $role->load('permissions'),
+                ], 201);
+                
+            } catch (\Exception $e) {
+                return response()->json([
+                    'error' => 'Failed to create role: ' . $e->getMessage(),
+                ], 500);
             }
-            
-            $permissions = $request->input('permissions', []);
-            
-            // Sync permissions (this will add/remove as needed)
-            $role->syncPermissions($permissions);
-            
-            // Clear permission cache
-            app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
-            
-            return response()->json([
-                'message' => 'Permissions updated successfully',
-                'role' => $role->load('permissions'),
-            ]);
+        })->middleware('permission:users.edit');
+        
+        // Update role permissions
+        Route::patch('/roles/{role}/permissions', function (Request $request, $roleId) {
+            try {
+                $role = \Spatie\Permission\Models\Role::where('id', $roleId)
+                    ->where('guard_name', 'web')
+                    ->first();
+                
+                if (!$role) {
+                    return response()->json(['error' => 'Role not found'], 404);
+                }
+                
+                $permissions = $request->input('permissions', []);
+                $role->syncPermissions($permissions);
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+                
+                return response()->json([
+                    'message' => 'Permissions updated successfully',
+                    'role' => $role->load('permissions'),
+                ]);
+                
+            } catch (\Exception $e) {
+                return response()->json([
+                    'error' => 'Failed to update permissions: ' . $e->getMessage(),
+                ], 500);
+            }
         })->middleware('permission:users.edit');
         
         // Delete a user (admin only)
         Route::delete('/users/{user}', function (\App\Models\User $user) {
-            $user->delete();
-            return response()->json(['message' => 'User deleted']);
+            try {
+                $user->delete();
+                return response()->json(['message' => 'User deleted successfully']);
+            } catch (\Exception $e) {
+                return response()->json(['error' => 'Failed to delete user: ' . $e->getMessage()], 500);
+            }
         })->middleware('permission:users.delete');
     });
 });
