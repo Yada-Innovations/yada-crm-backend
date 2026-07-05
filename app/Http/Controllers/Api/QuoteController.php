@@ -1,168 +1,273 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Quote;
-use App\Models\Lead;
-use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 
 class QuoteController extends Controller
 {
-    const MIN_MARGIN = 50;
-
+    /**
+     * Display a listing of quotes.
+     */
     public function index()
     {
-        return response()->json(Quote::with(['lead', 'creator'])->latest()->get());
+        $quotes = Quote::with(['client', 'service', 'createdBy'])->get();
+        return response()->json($quotes);
     }
 
+    /**
+     * Store a newly created quote.
+     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'lead_id'      => 'required|exists:leads,id',
-            'base_amount'  => 'required|numeric|min:0',
-            'discount_pct' => 'nullable|numeric|min:0|max:50',
-            'valid_until'  => 'nullable|date',
+        $validated = $request->validate([
+            // Client & Service
+            'client_id' => 'required|exists:clients,id',
+            'service_id' => 'nullable|exists:services,id',
+            
+            // Features
+            'features' => 'required|array|min:1',
+            'features.*.name' => 'required|string|max:255',
+            'features.*.description' => 'nullable|string',
+            'features.*.quantity' => 'required|numeric|min:1',
+            'features.*.unit_price' => 'required|numeric|min:0',
+            'features.*.total' => 'nullable|numeric|min:0',
+            
+            // Financials
+            'subtotal' => 'nullable|numeric|min:0',
+            'tax' => 'nullable|numeric|min:0',
+            'tax_rate' => 'nullable|numeric|min:0|max:100',
+            'total' => 'nullable|numeric|min:0',
+            
+            // Dates and Status
+            'valid_until' => 'required|date|after_or_equal:today',
+            'status' => ['nullable', Rule::in(['draft', 'sent', 'approved', 'rejected'])],
+            
+            // Additional Info
+            'notes' => 'nullable|string',
+            'supporting_document' => 'nullable|string|max:255',
         ]);
 
-        $lead = Lead::find($data['lead_id']);
-        if (!$lead) {
-            return response()->json(['message' => 'Lead not found'], 404);
+        // Set defaults
+        $validated['status'] = $validated['status'] ?? 'draft';
+        $validated['tax_rate'] = $validated['tax_rate'] ?? 16;
+        
+        // Calculate totals if not provided
+        if (!isset($validated['subtotal']) || !isset($validated['tax']) || !isset($validated['total'])) {
+            $subtotal = 0;
+            foreach ($validated['features'] as $feature) {
+                $subtotal += ($feature['quantity'] ?? 0) * ($feature['unit_price'] ?? 0);
+            }
+            $tax = ($subtotal * $validated['tax_rate']) / 100;
+            $total = $subtotal + $tax;
+            
+            $validated['subtotal'] = $subtotal;
+            $validated['tax'] = $tax;
+            $validated['total'] = $total;
         }
+        
+        // Set the created_by
+        $validated['created_by'] = Auth::id();
+        
+        // Generate UUID
+        $validated['id'] = (string) Str::uuid();
 
-        // Check if lead already has a quote
-        if ($lead->quotes()->exists()) {
+        try {
+            $quote = Quote::create($validated);
+            
+            return response()->json($quote->load(['client', 'service', 'createdBy']), 201);
+        } catch (\Exception $e) {
             return response()->json([
-                'message' => 'This lead already has a quote. You can edit the existing quote.',
-            ], 422);
+                'error' => 'Failed to create quote',
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        $base        = $data['base_amount'];
-        $discount    = $data['discount_pct'] ?? 0;
-        $final       = $base * (1 - $discount / 100);
-        $cost        = $base * 0.5; // cost assumed 50% of base
-        $margin      = $final > 0 ? (($final - $cost) / $final) * 100 : 0;
-
-        // Enforce minimum 50% margin
-        if ($margin < self::MIN_MARGIN) {
-            return response()->json([
-                'message' => 'Discount too high — margin would fall below 50%. Maximum discount is 50%.',
-                'margin' => round($margin, 2),
-            ], 422);
-        }
-
-        // Create the quote
-        $quote = Quote::create([
-            'id'           => Str::uuid(),
-            'lead_id'      => $data['lead_id'],
-            'base_amount'  => $base,
-            'discount_pct' => $discount,
-            'final_amount' => $final,
-            'margin_pct'   => round($margin, 2),
-            'created_by'   => $request->user()->id,
-            'valid_until'  => $data['valid_until'] ?? null,
-            'status'       => 'draft',
-        ]);
-
-        // Update lead stage to 'quote_sent'
-        $lead->update(['stage' => 'quote_sent']);
-
-        // Create notification
-        Notification::create([
-            'id' => Str::uuid(),
-            'user_id' => $request->user()->id,
-            'type' => 'success',
-            'title' => '📄 Quote Created',
-            'message' => "Quote for {$lead->company_name} created successfully (KES " . number_format($final) . ")",
-            'link' => "/quotes",
-        ]);
-
-        return response()->json($quote->load(['lead', 'creator']), 201);
     }
 
+    /**
+     * Display the specified quote.
+     */
     public function show(Quote $quote)
     {
-        return response()->json($quote->load(['lead', 'creator']));
+        return response()->json($quote->load(['client', 'service', 'createdBy']));
     }
 
+    /**
+     * Update the specified quote.
+     */
     public function update(Request $request, Quote $quote)
     {
-        $data = $request->validate([
-            'status'       => 'sometimes|in:draft,sent,viewed,negotiating,accepted,rejected,expired',
-            'discount_pct' => 'sometimes|numeric|min:0|max:50',
-            'base_amount'  => 'sometimes|numeric|min:0',
-            'valid_until'  => 'sometimes|date',
+        $validated = $request->validate([
+            // Client & Service
+            'client_id' => 'sometimes|exists:clients,id',
+            'service_id' => 'nullable|exists:services,id',
+            
+            // Features
+            'features' => 'sometimes|array|min:1',
+            'features.*.name' => 'required|string|max:255',
+            'features.*.description' => 'nullable|string',
+            'features.*.quantity' => 'required|numeric|min:1',
+            'features.*.unit_price' => 'required|numeric|min:0',
+            'features.*.total' => 'nullable|numeric|min:0',
+            
+            // Financials
+            'subtotal' => 'nullable|numeric|min:0',
+            'tax' => 'nullable|numeric|min:0',
+            'tax_rate' => 'nullable|numeric|min:0|max:100',
+            'total' => 'nullable|numeric|min:0',
+            
+            // Dates and Status
+            'valid_until' => 'sometimes|date|after_or_equal:today',
+            'status' => ['nullable', Rule::in(['draft', 'sent', 'approved', 'rejected'])],
+            
+            // Additional Info
+            'notes' => 'nullable|string',
+            'supporting_document' => 'nullable|string|max:255',
         ]);
 
-        // If updating discount, recalculate margin
-        if (isset($data['discount_pct']) || isset($data['base_amount'])) {
-            $base = $data['base_amount'] ?? $quote->base_amount;
-            $discount = $data['discount_pct'] ?? $quote->discount_pct;
-            $final = $base * (1 - $discount / 100);
-            $cost = $base * 0.5;
-            $margin = $final > 0 ? (($final - $cost) / $final) * 100 : 0;
-
-            if ($margin < self::MIN_MARGIN) {
-                return response()->json([
-                    'message' => 'Discount too high — margin would fall below 50%.',
-                    'margin' => round($margin, 2),
-                ], 422);
-            }
-
-            $data['final_amount'] = $final;
-            $data['margin_pct'] = round($margin, 2);
-        }
-
-        // If changing status, handle lead stage updates
-        if (isset($data['status'])) {
-            $lead = $quote->lead;
+        // Recalculate totals if features or tax_rate changed
+        if (isset($validated['features']) || isset($validated['tax_rate'])) {
+            $features = $validated['features'] ?? $quote->features;
+            $taxRate = $validated['tax_rate'] ?? $quote->tax_rate;
             
-            switch ($data['status']) {
-                case 'sent':
-                    $lead->update(['stage' => 'quote_sent']);
-                    break;
-                case 'viewed':
-                    $lead->update(['stage' => 'quote_sent']);
-                    break;
-                case 'negotiating':
-                    $lead->update(['stage' => 'negotiation']);
-                    break;
-                case 'accepted':
-                    $lead->update(['stage' => 'negotiation']);
-                    Notification::create([
-                        'id' => Str::uuid(),
-                        'user_id' => $request->user()->id,
-                        'type' => 'success',
-                        'title' => '✅ Quote Accepted!',
-                        'message' => "Quote for {$lead->company_name} has been accepted",
-                        'link' => "/quotes",
-                    ]);
-                    break;
-                case 'rejected':
-                    Notification::create([
-                        'id' => Str::uuid(),
-                        'user_id' => $request->user()->id,
-                        'type' => 'warning',
-                        'title' => '❌ Quote Rejected',
-                        'message' => "Quote for {$lead->company_name} was rejected",
-                        'link' => "/quotes",
-                    ]);
-                    break;
+            $subtotal = 0;
+            foreach ($features as $feature) {
+                $subtotal += ($feature['quantity'] ?? 0) * ($feature['unit_price'] ?? 0);
             }
+            $tax = ($subtotal * $taxRate) / 100;
+            $total = $subtotal + $tax;
+            
+            $validated['subtotal'] = $subtotal;
+            $validated['tax'] = $tax;
+            $validated['total'] = $total;
         }
 
-        $quote->update($data);
-        return response()->json($quote->load(['lead', 'creator']));
+        try {
+            $quote->update($validated);
+            
+            return response()->json($quote->load(['client', 'service', 'createdBy']));
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to update quote',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
+    /**
+     * Remove the specified quote.
+     */
     public function destroy(Quote $quote)
     {
-        $lead = $quote->lead;
-        $lead->update(['stage' => 'lead']);
+        try {
+            $quote->delete();
+            return response()->json(['message' => 'Quote deleted successfully']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to delete quote',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update quote status.
+     */
+    public function updateStatus(Request $request, Quote $quote)
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['draft', 'sent', 'approved', 'rejected'])],
+        ]);
+
+        $quote->status = $validated['status'];
+        $quote->save();
+
+        return response()->json($quote);
+    }
+
+    /**
+     * Send quote to client.
+     */
+    public function send(Request $request, Quote $quote)
+    {
+        // This would send an email to the client
+        // Implementation depends on your email setup
         
-        $quote->delete();
+        $quote->status = 'sent';
+        $quote->save();
+
+        return response()->json([
+            'message' => 'Quote sent successfully',
+            'quote' => $quote
+        ]);
+    }
+
+    /**
+     * Approve quote.
+     */
+    public function approve(Quote $quote)
+    {
+        $quote->status = 'approved';
+        $quote->save();
+
+        return response()->json([
+            'message' => 'Quote approved successfully',
+            'quote' => $quote
+        ]);
+    }
+
+    /**
+     * Reject quote.
+     */
+    public function reject(Request $request, Quote $quote)
+    {
+        $validated = $request->validate([
+            'reason' => 'nullable|string',
+        ]);
+
+        $quote->status = 'rejected';
+        $quote->notes = ($quote->notes ? $quote->notes . "\n" : '') . 'Rejected: ' . ($validated['reason'] ?? 'No reason provided');
+        $quote->save();
+
+        return response()->json([
+            'message' => 'Quote rejected',
+            'quote' => $quote
+        ]);
+    }
+
+    /**
+     * Get quote statistics.
+     */
+    public function stats()
+    {
+        $stats = [
+            'total' => Quote::count(),
+            'draft' => Quote::where('status', 'draft')->count(),
+            'sent' => Quote::where('status', 'sent')->count(),
+            'approved' => Quote::where('status', 'approved')->count(),
+            'rejected' => Quote::where('status', 'rejected')->count(),
+            'total_value' => Quote::sum('total'),
+        ];
+
+        return response()->json($stats);
+    }
+
+    /**
+     * Generate PDF for quote.
+     */
+    public function generatePdf(Quote $quote)
+    {
+        // This would generate a PDF for the quote
+        // Implementation depends on your PDF library (e.g., DomPDF, TCPDF)
         
-        return response()->json(['message' => 'Quote deleted and lead returned to lead stage']);
+        return response()->json([
+            'message' => 'PDF generation not implemented yet',
+            'quote' => $quote
+        ]);
     }
 }

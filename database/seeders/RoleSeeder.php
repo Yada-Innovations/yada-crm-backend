@@ -13,7 +13,7 @@ class RoleSeeder extends Seeder
 
         $modules = [
             'leads', 'quotes', 'clients', 'subscriptions',
-            'tickets', 'feature_requests', 'invoices', 'users', 'analytics',
+            'tickets', 'feature_requests', 'invoices', 'users', 'analytics', 'services', 'work_done',
         ];
         $actions = ['view', 'create', 'edit', 'delete'];
 
@@ -24,7 +24,7 @@ class RoleSeeder extends Seeder
             }
         }
 
-        // Admin — gets everything
+        // Admin - gets everything
         $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin->syncPermissions(Permission::all());
 
@@ -36,9 +36,10 @@ class RoleSeeder extends Seeder
             'clients.view', 'clients.create', 'clients.edit',
             'subscriptions.view',
             'analytics.view',
+            'services.view', 'services.create', 'services.edit', 'services.delete',
         ]);
 
-        // Support agent
+        // Support agent - no services permissions
         $support = Role::firstOrCreate(['name' => 'support_agent', 'guard_name' => 'web']);
         $support->syncPermissions([
             'tickets.view', 'tickets.create', 'tickets.edit',

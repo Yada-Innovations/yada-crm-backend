@@ -11,8 +11,7 @@ return new class extends Migration {
             $table->uuid('client_id')->nullable();
             $table->foreign('client_id')->references('id')->on('clients')->nullOnDelete();
             $table->uuid('service_id')->nullable();
-            // Remove the foreign key constraint for service_id
-            // It will be added after services table exists
+            $table->foreign('service_id')->references('id')->on('services')->nullOnDelete();
             $table->json('features')->nullable();
             $table->decimal('subtotal', 15, 2)->default(0);
             $table->decimal('tax', 15, 2)->default(0);

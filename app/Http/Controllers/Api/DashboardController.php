@@ -1,60 +1,60 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
 use App\Models\Client;
-use App\Models\Ticket;
-use App\Models\Subscription;
-use App\Models\Invoice;
-use Illuminate\Support\Carbon;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $now = Carbon::now();
+        try {
+            // Get counts
+            $totalLeads = Lead::count();
+            $activeClients = Client::where('status', 'active')->count();
+            
+            // Get leads by status
+            $leadsByStatus = [
+                'lead' => Lead::where('status', 'new')->count(),
+                'quote' => Lead::where('status', 'contacted')->count(),
+                'demo' => Lead::where('status', 'qualified')->count(),
+                'technical_review' => Lead::where('status', 'converted')->count(),
+                'closed_won' => Lead::where('status', 'converted')->count(),
+            ];
 
-        // MRR — sum of active subscription plan prices
-        $mrr = Subscription::where('status', 'active')
-            ->with('plan')
-            ->get()
-            ->sum(fn($s) => $s->plan?->price ?? 0);
+            // Get recent activity
+            $recentActivity = [];
+            $recentLeads = Lead::latest()->take(5)->get();
+            foreach ($recentLeads as $lead) {
+                $name = $lead->contact_name ?? $lead->name ?? 'Unknown';
+                $recentActivity[] = [
+                    'time' => $lead->created_at->format('H:i'),
+                    'label' => 'New lead: ' . $name,
+                ];
+            }
 
-        // Leads by stage
-        $leadsByStage = Lead::selectRaw('stage, count(*) as count')
-            ->groupBy('stage')
-            ->pluck('count', 'stage');
+            // Build response
+            $data = [
+                'total_leads' => $totalLeads,
+                'active_clients' => $activeClients,
+                'open_tickets' => 0,
+                'renewals_due' => 0,
+                'mrr' => 0,
+                'arr' => 0,
+                'leads_by_stage' => $leadsByStatus,
+                'recent_activity' => $recentActivity,
+            ];
 
-        // Open tickets
-        $openTickets = Ticket::whereIn('status', ['open','in_progress','assigned'])->count();
+            return response()->json($data, 200);
 
-        // Renewals due in 30 days
-        $renewalsDue = Subscription::where('status', 'active')
-            ->whereBetween('ends_at', [$now, $now->copy()->addDays(30)])
-            ->count();
-
-        // Recent activity (last 5 invoices)
-        $recentInvoices = Invoice::with('client')
-            ->latest()
-            ->take(5)
-            ->get()
-            ->map(fn($inv) => [
-                'type'   => 'invoice',
-                'label'  => "Invoice {$inv->invoice_number} — {$inv->client?->name}",
-                'time'   => $inv->created_at->format('H:i'),
-                'amount' => $inv->total,
-            ]);
-
-        return response()->json([
-            'mrr'           => $mrr,
-            'arr'           => $mrr * 12,
-            'active_clients'=> Client::where('status', 'active')->count(),
-            'open_tickets'  => $openTickets,
-            'renewals_due'  => $renewalsDue,
-            'leads_by_stage'=> $leadsByStage,
-            'total_leads'   => Lead::count(),
-            'recent_activity' => $recentInvoices,
-        ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to load dashboard',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

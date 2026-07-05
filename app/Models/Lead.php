@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class Lead extends Model
@@ -9,46 +11,63 @@ class Lead extends Model
     use HasUuids;
 
     protected $fillable = [
-        'company_name', 'contact_name', 'email', 'phone',
-        'stage', 'estimated_value', 'currency',
-        'assigned_to', 'client_id', 'notes',
-        'signature', 'signed_at', 'disqualification_reason',
-        'disqualified_at', 'disqualified_by',
+        'id',
+        'contact_name',
+        'company_name',
+        'email',
+        'phone',
+        'title',
+        'status',
+        'priority',
+        'sales_stage',
+        'score',
+        'estimated_value',
+        'currency',
+        'expected_close_date',
+        'notes',
+        'source',
+        'industry',
+        'company_size',
+        'website',
+        'address',
+        'city',
+        'state',
+        'country',
+        'assigned_to',
+        'client_id',  // ← Make sure this is here
+        'signature',
+        'signed_at',
+        'disqualification_reason',
+        'disqualified_at',
+        'disqualified_by',
     ];
 
     protected $casts = [
         'estimated_value' => 'decimal:2',
+        'score' => 'integer',
+        'expected_close_date' => 'date',
         'signed_at' => 'datetime',
         'disqualified_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
-    public function assignedUser()
+    protected $attributes = [
+        'status' => 'new',
+        'priority' => 'medium',
+        'sales_stage' => 'prospecting',
+        'score' => 0,
+        'currency' => 'KES',
+        'country' => 'Kenya',
+    ];
+
+    public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
-    public function client()
+    public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
-    }
-
-    public function quotes()
-    {
-        return $this->hasMany(Quote::class);
-    }
-
-    public function demos()
-    {
-        return $this->hasMany(Demo::class);
-    }
-
-    public function tasks()
-    {
-        return $this->hasMany(Task::class);
-    }
-
-    public function deal()
-    {
-        return $this->hasOne(Deal::class);
     }
 }
