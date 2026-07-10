@@ -17,14 +17,22 @@ class CrmSeeder extends Seeder
     public function run(): void
     {
         $admin = User::firstOrCreate(
+            ['email' => 'admin@yadacrm.com'],
+            [
+                'name' => 'System Admin',
+                'password' => bcrypt('Livymugo@20'),
+            ]
+        );
+        $admin->assignRole('admin');
+
+        $rose = User::firstOrCreate(
             ['email' => 'rose@yada.co.ke'],
             [
                 'name' => 'Rose Wanjiku',
                 'password' => bcrypt('password'),
-                'id' => 3
             ]
         );
-        $admin->assignRole('admin');
+        $rose->assignRole('admin');
         // Subscription plans
         $starter = SubscriptionPlan::create([
             'id' => Str::uuid(), 'name' => 'Starter',
