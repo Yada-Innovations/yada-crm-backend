@@ -23,6 +23,7 @@ class Lead extends Model
         'status',
         'source',
         'notes',
+        'estimated_value',
         'address',
         'city',
         'country',

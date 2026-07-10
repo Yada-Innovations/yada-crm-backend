@@ -10,13 +10,15 @@ return new class extends Migration
     {
         Schema::table('roles', function (Blueprint $table) {
             $table->string('name')->unique()->after('id');
-            $table->string('display_name')->nullable()->after('name');
+            $table->string('guard_name')->default('web')->after('name');
+            $table->string('display_name')->nullable()->after('guard_name');
             $table->string('description')->nullable()->after('display_name');
         });
 
         Schema::table('permissions', function (Blueprint $table) {
             $table->string('name')->unique()->after('id');
-            $table->string('display_name')->nullable()->after('name');
+            $table->string('guard_name')->default('web')->after('name');
+            $table->string('display_name')->nullable()->after('guard_name');
             $table->string('description')->nullable()->after('display_name');
         });
     }
@@ -24,11 +26,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('roles', function (Blueprint $table) {
-            $table->dropColumn(['name', 'display_name', 'description']);
+            $table->dropColumn(['name', 'guard_name', 'display_name', 'description']);
         });
 
         Schema::table('permissions', function (Blueprint $table) {
-            $table->dropColumn(['name', 'display_name', 'description']);
+            $table->dropColumn(['name', 'guard_name', 'display_name', 'description']);
         });
     }
 };

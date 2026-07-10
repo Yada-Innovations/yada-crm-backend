@@ -16,8 +16,15 @@ class CrmSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::find(3); // Rose Wanjiku
-
+        $admin = User::firstOrCreate(
+            ['email' => 'rose@yada.co.ke'],
+            [
+                'name' => 'Rose Wanjiku',
+                'password' => bcrypt('password'),
+                'id' => 3
+            ]
+        );
+        $admin->assignRole('admin');
         // Subscription plans
         $starter = SubscriptionPlan::create([
             'id' => Str::uuid(), 'name' => 'Starter',
@@ -46,11 +53,11 @@ class CrmSeeder extends Seeder
         Subscription::create(['id' => Str::uuid(), 'client_id' => $kcb->id, 'plan_id' => $enterprise->id, 'seats_used' => 67, 'status' => 'active', 'starts_at' => '2026-01-01', 'ends_at' => '2026-07-01']);
 
         // Leads
-        Lead::create(['id' => Str::uuid(), 'company_name' => 'Equity Bank', 'contact_name' => 'John Kamau', 'email' => 'jkamau@equity.co.ke', 'stage' => 'lead', 'estimated_value' => 320000, 'assigned_to' => $admin->id]);
-        Lead::create(['id' => Str::uuid(), 'company_name' => 'Safaricom', 'contact_name' => 'Mary Wanjiru', 'email' => 'mwanjiru@safaricom.co.ke', 'stage' => 'quote', 'estimated_value' => 1200000, 'assigned_to' => $admin->id]);
-        Lead::create(['id' => Str::uuid(), 'company_name' => 'NCBA Bank', 'contact_name' => 'Peter Otieno', 'email' => 'potieno@ncba.co.ke', 'stage' => 'demo', 'estimated_value' => 440000, 'assigned_to' => $admin->id]);
-        Lead::create(['id' => Str::uuid(), 'company_name' => 'Stanbic Bank', 'contact_name' => 'Alice Njeri', 'email' => 'anjeri@stanbic.co.ke', 'stage' => 'technical_review', 'estimated_value' => 780000, 'assigned_to' => $admin->id]);
-        Lead::create(['id' => Str::uuid(), 'company_name' => 'I&M Bank', 'contact_name' => 'David Maina', 'email' => 'dmaina@im.co.ke', 'stage' => 'closed_won', 'estimated_value' => 500000, 'assigned_to' => $admin->id]);
+        Lead::create(['id' => Str::uuid(), 'company' => 'Equity Bank', 'name' => 'John Kamau', 'email' => 'jkamau@equity.co.ke', 'status' => 'new', 'estimated_value' => 320000, 'assigned_to' => $admin->id]);
+        Lead::create(['id' => Str::uuid(), 'company' => 'Safaricom', 'name' => 'Mary Wanjiru', 'email' => 'mwanjiru@safaricom.co.ke', 'status' => 'contacted', 'estimated_value' => 1200000, 'assigned_to' => $admin->id]);
+        Lead::create(['id' => Str::uuid(), 'company' => 'NCBA Bank', 'name' => 'Peter Otieno', 'email' => 'potieno@ncba.co.ke', 'status' => 'qualified', 'estimated_value' => 440000, 'assigned_to' => $admin->id]);
+        Lead::create(['id' => Str::uuid(), 'company' => 'Stanbic Bank', 'name' => 'Alice Njeri', 'email' => 'anjeri@stanbic.co.ke', 'status' => 'qualified', 'estimated_value' => 780000, 'assigned_to' => $admin->id]);
+        Lead::create(['id' => Str::uuid(), 'company' => 'I&M Bank', 'name' => 'David Maina', 'email' => 'dmaina@im.co.ke', 'status' => 'converted', 'estimated_value' => 500000, 'assigned_to' => $admin->id]);
 
         // Tickets
         Ticket::create(['id' => Str::uuid(), 'subject' => 'API timeout on invoice sync', 'description' => 'Invoice sync timing out after 30s', 'client_id' => $xyz->id, 'status' => 'in_progress', 'priority' => 'high', 'created_by' => $admin->id]);

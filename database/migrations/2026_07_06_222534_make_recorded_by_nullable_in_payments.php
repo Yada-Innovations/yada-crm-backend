@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('payments', function (Blueprint $table) {
             if (Schema::hasColumn('payments', 'recorded_by')) {
-                $table->string('recorded_by')->nullable()->change();
+                $table->unsignedBigInteger('recorded_by')->nullable()->change();
             }
         });
     }
@@ -19,7 +19,7 @@ return new class extends Migration
     {
         Schema::table('payments', function (Blueprint $table) {
             if (Schema::hasColumn('payments', 'recorded_by')) {
-                $table->string('recorded_by')->nullable(false)->change();
+                $table->unsignedBigInteger('recorded_by')->nullable(false)->change();
             }
         });
     }

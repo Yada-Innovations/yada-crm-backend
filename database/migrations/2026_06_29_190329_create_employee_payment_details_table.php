@@ -7,8 +7,8 @@ return new class extends Migration {
     public function up(): void {
         Schema::create('employee_payment_details', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->uuid('employee_id');
-            $table->foreign('employee_id')->references('id')->on('employees')->cascadeOnDelete();
+            $table->unsignedBigInteger('user_id');
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
             $table->decimal('base_salary', 15, 2)->default(0);
             $table->decimal('housing_allowance', 15, 2)->default(0);
             $table->decimal('transport_allowance', 15, 2)->default(0);
