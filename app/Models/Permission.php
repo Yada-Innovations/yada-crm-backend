@@ -2,14 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Models\Permission as SpatiePermission;
 
-class Permission extends Model
+/**
+ * Extends Spatie's Permission model to allow customization.
+ * Registered in config/permission.php under models.permission.
+ */
+class Permission extends SpatiePermission
 {
-    protected $fillable = ['name', 'display_name', 'description'];
-
-    public function roles()
-    {
-        return $this->belongsToMany(Role::class);
-    }
+    // Add custom attributes or methods here if needed
 }

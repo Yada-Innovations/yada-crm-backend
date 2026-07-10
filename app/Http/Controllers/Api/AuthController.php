@@ -26,7 +26,7 @@ class AuthController extends Controller
             'last_name' => 'required_without:name|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'sometimes|string|in:admin,sales_agent,support_agent',
+            'role' => 'prohibited', // Role is never accepted from public registration
             
             // Contact Information
             'phone' => 'nullable|string|max:20',
@@ -92,24 +92,11 @@ class AuthController extends Controller
             'language' => $validated['language'] ?? 'en',
         ]);
 
-        // Assign role
-        $roleName = $validated['role'] ?? 'sales_agent';
-        $role = Role::where('name', $roleName)->first();
+        // Assign default role — never trust a client-supplied role name
+        $role = Role::where('name', 'sales_agent')->first();
         if ($role) {
             $user->assignRole($role);
         }
-
-        // Create default payment details for employee
-        EmployeePaymentDetail::create([
-            'employee_id' => $user->id,
-            'base_salary' => 0,
-            'housing_allowance' => 0,
-            'transport_allowance' => 0,
-            'medical_allowance' => 0,
-            'other_allowances' => 0,
-            'bonus' => 0,
-            'payment_frequency' => 'monthly',
-        ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -148,11 +135,27 @@ class AuthController extends Controller
         $user->tokens()->delete();
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Set the token in an httpOnly cookie so JavaScript cannot access it.
+        // The SetBearerTokenFromCookie middleware reads this cookie and injects
+        // it as a bearer token for Sanctum on every subsequent API request.
+        $cookie = cookie(
+            name: 'auth_token',
+            value: $token,
+            minutes: 60 * 24,          // 24 hours
+            path: '/',
+            domain: null,              // current domain only
+            secure: app()->isProduction(), // HTTPS only in production
+            httpOnly: true,            // not accessible via JavaScript
+            raw: false,
+            sameSite: 'Lax',           // CSRF protection while allowing normal navigation
+        );
+
         return response()->json([
             'message' => 'Login successful',
+            // Still return token in body for non-browser clients (mobile / Postman)
             'token' => $token,
             'user' => $this->formatUserResponse($user),
-        ]);
+        ])->withCookie($cookie);
     }
 
     /**
@@ -162,9 +165,22 @@ class AuthController extends Controller
     {
         $request->user()->tokens()->delete();
 
+        // Expire the httpOnly auth cookie
+        $expiredCookie = cookie(
+            name: 'auth_token',
+            value: '',
+            minutes: -1,
+            path: '/',
+            domain: null,
+            secure: app()->isProduction(),
+            httpOnly: true,
+            raw: false,
+            sameSite: 'Lax',
+        );
+
         return response()->json([
             'message' => 'Logged out successfully',
-        ]);
+        ])->withCookie($expiredCookie);
     }
 
     /**

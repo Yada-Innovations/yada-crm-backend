@@ -315,7 +315,7 @@ Route::middleware('auth:sanctum')->group(function () {
                     'error' => 'Failed to create role: ' . $e->getMessage(),
                 ], 500);
             }
-        })->middleware('permission:users.edit');
+        })->middleware('permission:roles.create');
         
         Route::patch('/roles/{role}/permissions', function (Request $request, $roleId) {
             try {
@@ -341,7 +341,7 @@ Route::middleware('auth:sanctum')->group(function () {
                     'error' => 'Failed to update permissions: ' . $e->getMessage(),
                 ], 500);
             }
-        })->middleware('permission:users.edit');
+        })->middleware('permission:roles.edit');
         
         Route::delete('/roles/{role}', function ($roleId) {
             try {
@@ -376,6 +376,6 @@ Route::middleware('auth:sanctum')->group(function () {
                     'error' => 'Failed to delete role: ' . $e->getMessage(),
                 ], 500);
             }
-        })->middleware('permission:users.delete');
+        })->middleware('permission:roles.delete');
     });
 });

@@ -20,10 +20,7 @@ class CheckRole
             }
         }
 
-        return response()->json([
-            'message'   => 'Forbidden. You do not have the required role.',
-            'required'  => $roles,
-            'your_role' => $user->getRoleNames(),
-        ], 403);
+        // Do NOT leak required roles or user's current roles
+        return response()->json(['message' => 'Forbidden.'], 403);
     }
 }

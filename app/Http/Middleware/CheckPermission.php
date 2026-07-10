@@ -15,10 +15,8 @@ class CheckPermission
         }
 
         if (!$user->hasPermissionTo($permission)) {
-            return response()->json([
-                'message'    => 'Forbidden. Missing permission: ' . $permission,
-                'permission' => $permission,
-            ], 403);
+            // Do NOT leak which permission is missing
+            return response()->json(['message' => 'Forbidden.'], 403);
         }
 
         return $next($request);

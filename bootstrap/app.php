@@ -13,12 +13,18 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-          $middleware->redirectGuestsTo(fn() => null);
-    $middleware->alias([
-        'role'       => \App\Http\Middleware\CheckRole::class,
-        'permission' => \App\Http\Middleware\CheckPermission::class,
-    ]);
-        //
+        $middleware->redirectGuestsTo(fn() => null);
+
+        // ── Middleware aliases ──
+        $middleware->alias([
+            'role'       => \App\Http\Middleware\CheckRole::class,
+            'permission' => \App\Http\Middleware\CheckPermission::class,
+        ]);
+
+        // ── Prepend cookie-to-bearer bridge to all API routes ──
+        // Reads the httpOnly `auth_token` cookie and injects it as a
+        // Bearer token so Sanctum's auth:sanctum guard works transparently.
+        $middleware->prependToGroup('api', \App\Http\Middleware\SetBearerTokenFromCookie::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

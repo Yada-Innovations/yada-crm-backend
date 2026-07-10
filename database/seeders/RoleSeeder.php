@@ -13,33 +13,39 @@ class RoleSeeder extends Seeder
 
         // Define all modules with their permissions
         $modules = [
-            'leads', 
-            'quotes', 
-            'clients', 
+            'leads',
+            'quotes',
+            'clients',
             'subscriptions',
-            'tickets', 
-            'feature_requests', 
-            'invoices', 
-         
-            'analytics', 
-            'services', 
-            'work_orders', // Changed from work_done
+            'tickets',
+            'feature_requests',
+            'invoices',
+            'analytics',
+            'services',
+            'work_orders',
             'payments',
             'payroll',
             'employees',
-            'procurement', // Commented out for now - add when ready
+            'communications',
+            'email_templates',
+            'attendance',
+            'leave',
+            'agreements',
+            'users',
+            'roles',
+            'procurement', // Reserved for future use
         ];
-        
+
         $actions = ['view', 'create', 'edit', 'delete'];
 
-        // Create all permissions
+        // Create all permissions using 'web' guard (Spatie default)
         foreach ($modules as $module) {
             foreach ($actions as $action) {
                 Permission::firstOrCreate(['name' => "{$module}.{$action}", 'guard_name' => 'web']);
             }
         }
 
-        // Admin - gets everything
+        // Admin — gets everything
         $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin->syncPermissions(Permission::all());
 
@@ -52,7 +58,9 @@ class RoleSeeder extends Seeder
             'subscriptions.view',
             'analytics.view',
             'services.view', 'services.create', 'services.edit', 'services.delete',
-            'work_orders.view', 'work_orders.create', // Sales can view and create work orders
+            'work_orders.view', 'work_orders.create',
+            'payments.view',
+            'invoices.view',
         ]);
 
         // Support agent
@@ -61,6 +69,7 @@ class RoleSeeder extends Seeder
             'tickets.view', 'tickets.create', 'tickets.edit',
             'feature_requests.view', 'feature_requests.create',
             'clients.view',
+            'communications.view', 'communications.create',
         ]);
 
         // Optional: Create additional roles
