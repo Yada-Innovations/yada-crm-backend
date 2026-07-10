@@ -1,30 +1,40 @@
 <?php
+
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class EmployeeAgreement extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
+
+    protected $keyType = 'string';
+    public $incrementing = false;
 
     protected $fillable = [
-        'employee_id', 'type', 'title', 'description', 'signed_date',
-        'expiry_date', 'file_path', 'status', 'signed_by', 'notes',
+        'id',
+        'user_id',  // Changed from employee_id
+        'type',
+        'title',
+        'description',
+        'signed_date',
+        'status',
     ];
 
     protected $casts = [
         'signed_date' => 'date',
-        'expiry_date' => 'date',
     ];
 
-    public function employee()
+    public function user()
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(User::class);
     }
 
-    public function signer()
+    // For backward compatibility
+    public function employee()
     {
-        return $this->belongsTo(User::class, 'signed_by');
+        return $this->belongsTo(User::class, 'user_id', 'id');
     }
 }

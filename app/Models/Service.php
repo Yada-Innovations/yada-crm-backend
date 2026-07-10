@@ -16,7 +16,6 @@ class Service extends Model
         'description',
         'price',
         'tax_rate',
-        'profit_margin',
         'category',
         'duration',
         'delivery_time',
@@ -32,7 +31,6 @@ class Service extends Model
         'features' => 'array',
         'price' => 'decimal:2',
         'tax_rate' => 'decimal:2',
-        'profit_margin' => 'decimal:2',
         'is_available' => 'boolean',
         'requires_consultation' => 'boolean',
         'created_at' => 'datetime',
@@ -44,7 +42,6 @@ class Service extends Model
         'is_available' => true,
         'requires_consultation' => false,
         'tax_rate' => 16,
-        'profit_margin' => 50,
         'price' => 0,
     ];
 
@@ -61,20 +58,5 @@ class Service extends Model
     public function scopeAvailable($query)
     {
         return $query->where('is_available', true)->where('status', 'active');
-    }
-
-    public function scopeCategory($query, $category)
-    {
-        return $query->where('category', $category);
-    }
-
-    public function getTotalPriceAttribute(): float
-    {
-        return $this->price + ($this->price * $this->tax_rate / 100);
-    }
-
-    public function getMinSellingPriceAttribute(): float
-    {
-        return $this->price * (1 + $this->profit_margin / 100);
     }
 }

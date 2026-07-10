@@ -22,6 +22,10 @@ class Employee extends Model
         'termination_date' => 'date',
     ];
 
+    /**
+     * Get the user associated with this employee
+     * This maintains backward compatibility
+     */
     public function user()
     {
         return $this->belongsTo(User::class);

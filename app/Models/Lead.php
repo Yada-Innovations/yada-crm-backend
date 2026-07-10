@@ -3,70 +3,47 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class Lead extends Model
 {
     use HasUuids;
 
+    protected $keyType = 'string';
+    public $incrementing = false;
+
     protected $fillable = [
         'id',
-        'contact_name',
-        'company_name',
+        'client_id', // Add this
+        'name',
         'email',
         'phone',
+        'company',
         'title',
         'status',
-        'priority',
-        'sales_stage',
-        'score',
-        'estimated_value',
-        'currency',
-        'expected_close_date',
-        'notes',
         'source',
+        'notes',
+        'address',
+        'city',
+        'country',
         'industry',
         'company_size',
         'website',
-        'address',
-        'city',
-        'state',
-        'country',
+        'priority',
+        'sales_stage',
         'assigned_to',
-        'client_id',  // ← Make sure this is here
+        'expected_close_date',
         'signature',
         'signed_at',
-        'disqualification_reason',
-        'disqualified_at',
-        'disqualified_by',
     ];
 
     protected $casts = [
-        'estimated_value' => 'decimal:2',
-        'score' => 'integer',
         'expected_close_date' => 'date',
         'signed_at' => 'datetime',
-        'disqualified_at' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
     ];
 
-    protected $attributes = [
-        'status' => 'new',
-        'priority' => 'medium',
-        'sales_stage' => 'prospecting',
-        'score' => 0,
-        'currency' => 'KES',
-        'country' => 'Kenya',
-    ];
-
-    public function assignedUser(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'assigned_to');
-    }
-
-    public function client(): BelongsTo
+    // Relationship to client
+    public function client()
     {
         return $this->belongsTo(Client::class);
     }

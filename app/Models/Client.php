@@ -9,9 +9,12 @@ class Client extends Model
 {
     use HasUuids;
 
+    protected $keyType = 'string';
+    public $incrementing = false;
+
     protected $fillable = [
         'id',
-        'name',
+        'name', // Make sure this is here
         'email',
         'phone',
         'company',
@@ -19,27 +22,8 @@ class Client extends Model
         'status',
         'address',
         'city',
-        'state',
         'country',
+        'notes',
         'account_manager_id',
     ];
-
-    protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-    ];
-
-    protected $attributes = [
-        'status' => 'active',
-    ];
-
-    public function accountManager()
-    {
-        return $this->belongsTo(User::class, 'account_manager_id');
-    }
-
-    public function leads()
-    {
-        return $this->hasMany(Lead::class);
-    }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendQuoteCreatedEmail;
 use App\Models\Quote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -29,7 +30,7 @@ class QuoteController extends Controller
             // Client & Service
             'client_id' => 'required|exists:clients,id',
             'service_id' => 'nullable|exists:services,id',
-            
+
             // Features
             'features' => 'required|array|min:1',
             'features.*.name' => 'required|string|max:255',
@@ -37,17 +38,17 @@ class QuoteController extends Controller
             'features.*.quantity' => 'required|numeric|min:1',
             'features.*.unit_price' => 'required|numeric|min:0',
             'features.*.total' => 'nullable|numeric|min:0',
-            
+
             // Financials
             'subtotal' => 'nullable|numeric|min:0',
             'tax' => 'nullable|numeric|min:0',
             'tax_rate' => 'nullable|numeric|min:0|max:100',
             'total' => 'nullable|numeric|min:0',
-            
+
             // Dates and Status
             'valid_until' => 'required|date|after_or_equal:today',
             'status' => ['nullable', Rule::in(['draft', 'sent', 'approved', 'rejected'])],
-            
+
             // Additional Info
             'notes' => 'nullable|string',
             'supporting_document' => 'nullable|string|max:255',
@@ -56,7 +57,7 @@ class QuoteController extends Controller
         // Set defaults
         $validated['status'] = $validated['status'] ?? 'draft';
         $validated['tax_rate'] = $validated['tax_rate'] ?? 16;
-        
+
         // Calculate totals if not provided
         if (!isset($validated['subtotal']) || !isset($validated['tax']) || !isset($validated['total'])) {
             $subtotal = 0;
@@ -65,21 +66,24 @@ class QuoteController extends Controller
             }
             $tax = ($subtotal * $validated['tax_rate']) / 100;
             $total = $subtotal + $tax;
-            
+
             $validated['subtotal'] = $subtotal;
             $validated['tax'] = $tax;
             $validated['total'] = $total;
         }
-        
+
         // Set the created_by
         $validated['created_by'] = Auth::id();
-        
+
         // Generate UUID
         $validated['id'] = (string) Str::uuid();
 
         try {
             $quote = Quote::create($validated);
-            
+
+            // Dispatch the email job to notify the client
+            SendQuoteCreatedEmail::dispatch($quote);
+
             return response()->json($quote->load(['client', 'service', 'createdBy']), 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -106,7 +110,7 @@ class QuoteController extends Controller
             // Client & Service
             'client_id' => 'sometimes|exists:clients,id',
             'service_id' => 'nullable|exists:services,id',
-            
+
             // Features
             'features' => 'sometimes|array|min:1',
             'features.*.name' => 'required|string|max:255',
@@ -114,17 +118,17 @@ class QuoteController extends Controller
             'features.*.quantity' => 'required|numeric|min:1',
             'features.*.unit_price' => 'required|numeric|min:0',
             'features.*.total' => 'nullable|numeric|min:0',
-            
+
             // Financials
             'subtotal' => 'nullable|numeric|min:0',
             'tax' => 'nullable|numeric|min:0',
             'tax_rate' => 'nullable|numeric|min:0|max:100',
             'total' => 'nullable|numeric|min:0',
-            
+
             // Dates and Status
             'valid_until' => 'sometimes|date|after_or_equal:today',
             'status' => ['nullable', Rule::in(['draft', 'sent', 'approved', 'rejected'])],
-            
+
             // Additional Info
             'notes' => 'nullable|string',
             'supporting_document' => 'nullable|string|max:255',
@@ -134,14 +138,14 @@ class QuoteController extends Controller
         if (isset($validated['features']) || isset($validated['tax_rate'])) {
             $features = $validated['features'] ?? $quote->features;
             $taxRate = $validated['tax_rate'] ?? $quote->tax_rate;
-            
+
             $subtotal = 0;
             foreach ($features as $feature) {
                 $subtotal += ($feature['quantity'] ?? 0) * ($feature['unit_price'] ?? 0);
             }
             $tax = ($subtotal * $taxRate) / 100;
             $total = $subtotal + $tax;
-            
+
             $validated['subtotal'] = $subtotal;
             $validated['tax'] = $tax;
             $validated['total'] = $total;
@@ -149,7 +153,7 @@ class QuoteController extends Controller
 
         try {
             $quote->update($validated);
-            
+
             return response()->json($quote->load(['client', 'service', 'createdBy']));
         } catch (\Exception $e) {
             return response()->json([
@@ -195,9 +199,9 @@ class QuoteController extends Controller
      */
     public function send(Request $request, Quote $quote)
     {
-        // This would send an email to the client
-        // Implementation depends on your email setup
-        
+        // Re-send the quote email and mark as sent
+        SendQuoteCreatedEmail::dispatch($quote);
+
         $quote->status = 'sent';
         $quote->save();
 
@@ -264,7 +268,7 @@ class QuoteController extends Controller
     {
         // This would generate a PDF for the quote
         // Implementation depends on your PDF library (e.g., DomPDF, TCPDF)
-        
+
         return response()->json([
             'message' => 'PDF generation not implemented yet',
             'quote' => $quote

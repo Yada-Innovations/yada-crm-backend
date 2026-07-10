@@ -24,7 +24,6 @@ class ServiceController extends Controller
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'tax_rate' => 'nullable|numeric|min:0|max:100',
-            'profit_margin' => 'nullable|numeric|min:0|max:100',
             'category' => 'nullable|string|max:255',
             'duration' => 'nullable|string|max:255',
             'delivery_time' => 'nullable|string|max:255',
@@ -38,7 +37,7 @@ class ServiceController extends Controller
 
         $validated['id'] = (string) Str::uuid();
         $validated['created_by'] = Auth::id();
-        $validated['profit_margin'] = $validated['profit_margin'] ?? 50;
+        $validated['tax_rate'] = $validated['tax_rate'] ?? 16;
 
         try {
             $service = Service::create($validated);
@@ -63,7 +62,6 @@ class ServiceController extends Controller
             'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
             'tax_rate' => 'nullable|numeric|min:0|max:100',
-            'profit_margin' => 'nullable|numeric|min:0|max:100',
             'category' => 'nullable|string|max:255',
             'duration' => 'nullable|string|max:255',
             'delivery_time' => 'nullable|string|max:255',

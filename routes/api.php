@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\FeatureRequestController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\CommunicationController;
 use App\Http\Controllers\Api\NotificationController;
@@ -27,16 +28,22 @@ use App\Http\Controllers\Api\EmployeePaymentDetailController;
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/check-email', [AuthController::class, 'checkEmail']);
 });
 
 // ── Authenticated Routes ──
 Route::middleware('auth:sanctum')->group(function () {
     
-    // Auth
+    // ── Auth ──
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::patch('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    Route::get('/auth/permissions', [AuthController::class, 'permissions']);
+    Route::get('/auth/employees', [AuthController::class, 'getEmployees']);
+    Route::get('/auth/stats', [AuthController::class, 'stats']);
 
-    // Dashboard
+    // ── Dashboard ──
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
     // ── Leads ──
@@ -86,21 +93,36 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/feature-requests/{featureRequest}/vote', [FeatureRequestController::class, 'vote'])->middleware('permission:feature_requests.create');
 
     // ── Invoices ──
-    Route::get('/invoices', [InvoiceController::class, 'index'])->middleware('permission:invoices.view');
-    Route::post('/invoices', [InvoiceController::class, 'store'])->middleware('permission:invoices.create');
-    Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->middleware('permission:invoices.view');
-    Route::patch('/invoices/{invoice}', [InvoiceController::class, 'update'])->middleware('permission:invoices.edit');
-    Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy'])->middleware('permission:invoices.delete');
-    Route::post('/invoices/{invoice}/send-reminder', [InvoiceController::class, 'sendReminder'])->middleware('permission:invoices.edit');
+    Route::prefix('invoices')->group(function () {
+        Route::get('/', [InvoiceController::class, 'index'])->middleware('permission:invoices.view');
+        Route::post('/', [InvoiceController::class, 'store'])->middleware('permission:invoices.create');
+        Route::get('/{invoice}', [InvoiceController::class, 'show'])->middleware('permission:invoices.view');
+        Route::patch('/{invoice}', [InvoiceController::class, 'update'])->middleware('permission:invoices.edit');
+        Route::delete('/{invoice}', [InvoiceController::class, 'destroy'])->middleware('permission:invoices.delete');
+        Route::post('/{invoice}/send-reminder', [InvoiceController::class, 'sendReminder'])->middleware('permission:invoices.edit');
+        Route::get('/{invoice}/payments', [PaymentController::class, 'byInvoice'])->middleware('permission:invoices.view');
+        Route::get('/stats', [InvoiceController::class, 'stats'])->middleware('permission:invoices.view');
+    });
+
+    // ── Payments ──
+    Route::prefix('payments')->group(function () {
+        Route::get('/', [PaymentController::class, 'index'])->middleware('permission:payments.view');
+        Route::post('/', [PaymentController::class, 'store'])->middleware('permission:payments.create');
+        Route::get('/invoice/{invoiceId}', [PaymentController::class, 'byInvoice'])->middleware('permission:payments.view');
+        Route::get('/{payment}', [PaymentController::class, 'show'])->middleware('permission:payments.view');
+        Route::patch('/{payment}', [PaymentController::class, 'update'])->middleware('permission:payments.edit');
+        Route::delete('/{payment}', [PaymentController::class, 'destroy'])->middleware('permission:payments.delete');
+        Route::get('/stats', [PaymentController::class, 'stats'])->middleware('permission:payments.view');
+    });
 
     // ── Communications ──
-    Route::get('/communications', [CommunicationController::class, 'index'])->middleware('permission:clients.view');
-    Route::post('/communications', [CommunicationController::class, 'store'])->middleware('permission:clients.edit');
-    Route::get('/communications/{communication}', [CommunicationController::class, 'show'])->middleware('permission:clients.view');
-    Route::patch('/communications/{communication}', [CommunicationController::class, 'update'])->middleware('permission:clients.edit');
-    Route::delete('/communications/{communication}', [CommunicationController::class, 'destroy'])->middleware('permission:clients.delete');
-    Route::get('/clients/{client}/timeline', [CommunicationController::class, 'timeline'])->middleware('permission:clients.view');
-    Route::get('/communication/templates', [CommunicationController::class, 'templates'])->middleware('permission:clients.view');
+    Route::get('/communications', [CommunicationController::class, 'index'])->middleware('permission:communications.view');
+    Route::post('/communications', [CommunicationController::class, 'store'])->middleware('permission:communications.create');
+    Route::get('/communications/{communication}', [CommunicationController::class, 'show'])->middleware('permission:communications.view');
+    Route::patch('/communications/{communication}', [CommunicationController::class, 'update'])->middleware('permission:communications.edit');
+    Route::delete('/communications/{communication}', [CommunicationController::class, 'destroy'])->middleware('permission:communications.delete');
+    Route::get('/clients/{client}/timeline', [CommunicationController::class, 'timeline'])->middleware('permission:communications.view');
+    Route::get('/communication/templates', [CommunicationController::class, 'templates'])->middleware('permission:communications.view');
 
     // ── Notifications ──
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -120,103 +142,148 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{service}', [ServiceController::class, 'destroy'])->middleware('permission:services.delete');
     });
 
-    // ── Work Done / Work Orders ──
-    Route::prefix('work-done')->group(function () {
-        Route::get('/', [WorkDoneController::class, 'index'])->middleware('permission:work_done.view');
-        Route::post('/', [WorkDoneController::class, 'store'])->middleware('permission:work_done.create');
-        Route::get('/{workDone}', [WorkDoneController::class, 'show'])->middleware('permission:work_done.view');
-        Route::patch('/{workDone}', [WorkDoneController::class, 'update'])->middleware('permission:work_done.edit');
-        Route::delete('/{workDone}', [WorkDoneController::class, 'destroy'])->middleware('permission:work_done.delete');
-        Route::post('/{workDone}/invoice', [WorkDoneController::class, 'createInvoice'])->middleware('permission:work_done.edit');
-        Route::patch('/{workDone}/status', [WorkDoneController::class, 'updateStatus'])->middleware('permission:work_done.edit');
-        Route::get('/status/{status}', [WorkDoneController::class, 'byStatus'])->middleware('permission:work_done.view');
-        Route::get('/client/{clientId}', [WorkDoneController::class, 'byClient'])->middleware('permission:work_done.view');
-        Route::get('/stats', [WorkDoneController::class, 'stats'])->middleware('permission:work_done.view');
+    // ── Work Orders ──
+    Route::prefix('work-orders')->group(function () {
+        Route::get('/', [WorkDoneController::class, 'index'])->middleware('permission:work_orders.view');
+        Route::post('/', [WorkDoneController::class, 'store'])->middleware('permission:work_orders.create');
+        Route::get('/stats', [WorkDoneController::class, 'stats'])->middleware('permission:work_orders.view');
+        Route::get('/recent', [WorkDoneController::class, 'recent'])->middleware('permission:work_orders.view');
+        Route::get('/client/{clientId}', [WorkDoneController::class, 'byClient'])->middleware('permission:work_orders.view');
+        Route::get('/status/{status}', [WorkDoneController::class, 'byStatus'])->middleware('permission:work_orders.view');
+        Route::post('/date-range', [WorkDoneController::class, 'byDateRange'])->middleware('permission:work_orders.view');
+        Route::post('/bulk-status', [WorkDoneController::class, 'bulkUpdateStatus'])->middleware('permission:work_orders.edit');
+        Route::get('/{workOrder}', [WorkDoneController::class, 'show'])->middleware('permission:work_orders.view');
+        Route::patch('/{workOrder}', [WorkDoneController::class, 'update'])->middleware('permission:work_orders.edit');
+        Route::patch('/{workOrder}/status', [WorkDoneController::class, 'updateStatus'])->middleware('permission:work_orders.edit');
+        Route::post('/{workOrder}/invoice', [WorkDoneController::class, 'createInvoice'])->middleware('permission:work_orders.edit');
+        Route::delete('/{workOrder}', [WorkDoneController::class, 'destroy'])->middleware('permission:work_orders.delete');
     });
 
     // ── Email Templates ──
-    Route::get('/email-templates', [EmailTemplateController::class, 'index'])->middleware('permission:clients.view');
-    Route::post('/email-templates', [EmailTemplateController::class, 'store'])->middleware('permission:clients.edit');
-    Route::get('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'show'])->middleware('permission:clients.view');
-    Route::put('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])->middleware('permission:clients.edit');
-    Route::delete('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->middleware('permission:clients.delete');
+    Route::get('/email-templates', [EmailTemplateController::class, 'index'])->middleware('permission:email_templates.view');
+    Route::post('/email-templates', [EmailTemplateController::class, 'store'])->middleware('permission:email_templates.create');
+    Route::get('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'show'])->middleware('permission:email_templates.view');
+    Route::put('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])->middleware('permission:email_templates.edit');
+    Route::delete('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->middleware('permission:email_templates.delete');
 
-    // ── Employees ──
-    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
-        Route::get('/employees', [EmployeeController::class, 'index']);
-        Route::post('/employees', [EmployeeController::class, 'store'])->middleware('permission:users.create');
-        Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
-        Route::patch('/employees/{employee}', [EmployeeController::class, 'update'])->middleware('permission:users.edit');
-        Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:users.delete');
-        Route::get('/employees/stats', [EmployeeController::class, 'stats']);
+    // ── Employees (Unified with Users) ──
+    Route::prefix('employees')->group(function () {
+        Route::get('/', [EmployeeController::class, 'index'])->middleware('permission:employees.view');
+        Route::post('/', [EmployeeController::class, 'store'])->middleware('permission:employees.create');
+        Route::get('/stats', [EmployeeController::class, 'stats'])->middleware('permission:employees.view');
+        Route::get('/{employee}', [EmployeeController::class, 'show'])->middleware('permission:employees.view');
+        Route::patch('/{employee}', [EmployeeController::class, 'update'])->middleware('permission:employees.edit');
+        Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:employees.delete');
+        Route::get('/{employee}/attendance', [EmployeeController::class, 'attendance'])->middleware('permission:employees.view');
+        Route::get('/{employee}/leave', [EmployeeController::class, 'leave'])->middleware('permission:employees.view');
+        Route::get('/{employee}/agreements', [EmployeeController::class, 'agreements'])->middleware('permission:employees.view');
+        Route::get('/{employee}/payment', [EmployeeController::class, 'payment'])->middleware('permission:employees.view');
     });
 
     // ── Attendance ──
-    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
-        Route::get('/attendance', [AttendanceController::class, 'index']);
-        Route::post('/attendance', [AttendanceController::class, 'store'])->middleware('permission:users.edit');
-        Route::get('/attendance/{attendance}', [AttendanceController::class, 'show']);
-        Route::patch('/attendance/{attendance}', [AttendanceController::class, 'update'])->middleware('permission:users.edit');
-        Route::delete('/attendance/{attendance}', [AttendanceController::class, 'destroy'])->middleware('permission:users.delete');
-        Route::post('/attendance/bulk-checkin', [AttendanceController::class, 'bulkCheckIn'])->middleware('permission:users.edit');
-        Route::get('/attendance/summary/{employee}', [AttendanceController::class, 'summary']);
+    Route::prefix('attendance')->group(function () {
+        Route::get('/', [AttendanceController::class, 'index'])->middleware('permission:attendance.view');
+        Route::post('/', [AttendanceController::class, 'store'])->middleware('permission:attendance.create');
+        Route::post('/check-in', [AttendanceController::class, 'checkIn'])->middleware('permission:attendance.create');
+        Route::post('/check-out', [AttendanceController::class, 'checkOut'])->middleware('permission:attendance.create');
+        Route::get('/today', [AttendanceController::class, 'today'])->middleware('permission:attendance.view');
+        Route::get('/summary/{user}', [AttendanceController::class, 'summary'])->middleware('permission:attendance.view');
+        Route::get('/{attendance}', [AttendanceController::class, 'show'])->middleware('permission:attendance.view');
+        Route::patch('/{attendance}', [AttendanceController::class, 'update'])->middleware('permission:attendance.edit');
+        Route::delete('/{attendance}', [AttendanceController::class, 'destroy'])->middleware('permission:attendance.delete');
     });
 
     // ── Leave Requests ──
-    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
-        Route::get('/leave-requests', [LeaveRequestController::class, 'index']);
-        Route::post('/leave-requests', [LeaveRequestController::class, 'store'])->middleware('permission:users.edit');
-        Route::get('/leave-requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
-        Route::patch('/leave-requests/{leaveRequest}', [LeaveRequestController::class, 'update'])->middleware('permission:users.edit');
-        Route::delete('/leave-requests/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->middleware('permission:users.delete');
-        Route::post('/leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->middleware('permission:users.edit');
-        Route::post('/leave-requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware('permission:users.edit');
-        Route::get('/leave-requests/balance/{employee}', [LeaveRequestController::class, 'balance']);
+    Route::prefix('leave-requests')->group(function () {
+        Route::get('/', [LeaveRequestController::class, 'index'])->middleware('permission:leave.view');
+        Route::post('/', [LeaveRequestController::class, 'store'])->middleware('permission:leave.create');
+        Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->middleware('permission:leave.view');
+        Route::patch('/{leaveRequest}', [LeaveRequestController::class, 'update'])->middleware('permission:leave.edit');
+        Route::delete('/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->middleware('permission:leave.delete');
+        Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->middleware('permission:leave.edit');
+        Route::post('/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware('permission:leave.edit');
+        Route::get('/balance/{user}', [LeaveRequestController::class, 'balance'])->middleware('permission:leave.view');
     });
 
     // ── Employee Agreements ──
-    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
-        Route::get('/employee-agreements', [EmployeeAgreementController::class, 'index']);
-        Route::post('/employee-agreements', [EmployeeAgreementController::class, 'store'])->middleware('permission:users.edit');
-        Route::get('/employee-agreements/{agreement}', [EmployeeAgreementController::class, 'show']);
-        Route::patch('/employee-agreements/{agreement}', [EmployeeAgreementController::class, 'update'])->middleware('permission:users.edit');
-        Route::delete('/employee-agreements/{agreement}', [EmployeeAgreementController::class, 'destroy'])->middleware('permission:users.delete');
+    Route::prefix('employee-agreements')->group(function () {
+        Route::get('/', [EmployeeAgreementController::class, 'index'])->middleware('permission:agreements.view');
+        Route::post('/', [EmployeeAgreementController::class, 'store'])->middleware('permission:agreements.create');
+        Route::get('/{agreement}', [EmployeeAgreementController::class, 'show'])->middleware('permission:agreements.view');
+        Route::patch('/{agreement}', [EmployeeAgreementController::class, 'update'])->middleware('permission:agreements.edit');
+        Route::delete('/{agreement}', [EmployeeAgreementController::class, 'destroy'])->middleware('permission:agreements.delete');
     });
 
     // ── Employee Payment Details ──
-    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
-        Route::post('/employee-payment-details', [EmployeePaymentDetailController::class, 'store'])->middleware('permission:users.edit');
-        Route::patch('/employee-payment-details/{payment}', [EmployeePaymentDetailController::class, 'update'])->middleware('permission:users.edit');
-        Route::get('/employee-payment-details/{employee}', [EmployeePaymentDetailController::class, 'show']);
+    Route::prefix('employee-payment-details')->group(function () {
+        Route::post('/', [EmployeePaymentDetailController::class, 'store'])->middleware('permission:payments.edit');
+        Route::patch('/{payment}', [EmployeePaymentDetailController::class, 'update'])->middleware('permission:payments.edit');
+        Route::get('/{user}', [EmployeePaymentDetailController::class, 'show'])->middleware('permission:payments.view');
     });
 
     // ── Payroll ──
-    Route::middleware(['auth:sanctum', 'permission:users.view'])->group(function () {
-        Route::get('/payroll', [PayrollController::class, 'index']);
-        Route::get('/payroll/calculate/{employee}', [PayrollController::class, 'calculate']);
-        Route::post('/payroll/generate', [PayrollController::class, 'generate'])->middleware('permission:users.edit');
-        Route::get('/payroll/{payroll}', [PayrollController::class, 'show']);
-        Route::patch('/payroll/{payroll}/approve', [PayrollController::class, 'approve'])->middleware('permission:users.edit');
-        Route::patch('/payroll/{payroll}/paid', [PayrollController::class, 'markPaid'])->middleware('permission:users.edit');
-        Route::get('/payroll/summary', [PayrollController::class, 'summary']);
+    Route::prefix('payroll')->group(function () {
+        Route::get('/', [PayrollController::class, 'index'])->middleware('permission:payroll.view');
+        Route::get('/summary', [PayrollController::class, 'summary'])->middleware('permission:payroll.view');
+        Route::get('/stats', [PayrollController::class, 'stats'])->middleware('permission:payroll.view');
+        Route::get('/calculate/{user}', [PayrollController::class, 'calculate'])->middleware('permission:payroll.view');
+        Route::post('/generate', [PayrollController::class, 'generate'])->middleware('permission:payroll.create');
+        Route::post('/bulk-generate', [PayrollController::class, 'bulkGenerate'])->middleware('permission:payroll.create');
+        Route::get('/{payroll}', [PayrollController::class, 'show'])->middleware('permission:payroll.view');
+        Route::patch('/{payroll}', [PayrollController::class, 'update'])->middleware('permission:payroll.edit');
+        Route::patch('/{payroll}/approve', [PayrollController::class, 'approve'])->middleware('permission:payroll.edit');
+        Route::patch('/{payroll}/paid', [PayrollController::class, 'markPaid'])->middleware('permission:payroll.edit');
+        Route::delete('/{payroll}', [PayrollController::class, 'destroy'])->middleware('permission:payroll.delete');
     });
 
     // ── Admin Routes ──
     Route::middleware(['auth:sanctum', 'permission:users.view'])->prefix('admin')->group(function () {
         
-        // Get all users with roles and permissions
+        // ── Users (Admin only) ── FIXED: Removed 'permissions' from eager load
         Route::get('/users', function () {
-            $users = \App\Models\User::with('roles.permissions')->get();
+            $users = \App\Models\User::with(['roles', 'paymentDetail'])->get();
             return response()->json($users);
         });
         
-        // Get all roles with permissions
-        Route::get('/roles', function () {
-            $roles = \Spatie\Permission\Models\Role::with('permissions')->get();
-            return response()->json($roles);
-        });
+        Route::patch('/users/{user}', function (Request $request, \App\Models\User $user) {
+            try {
+                $data = $request->validate([
+                    'name' => 'sometimes|string|max:255',
+                    'email' => 'sometimes|email|unique:users,email,' . $user->id,
+                    'phone' => 'nullable|string|max:20',
+                    'department' => 'nullable|string|max:255',
+                    'position' => 'nullable|string|max:255',
+                    'status' => 'nullable|in:active,inactive,suspended,terminated',
+                    'role' => 'nullable|in:admin,sales_agent,support_agent',
+                ]);
+
+                $user->update($data);
+
+                if (isset($data['role'])) {
+                    $user->syncRoles([$data['role']]);
+                }
+
+                return response()->json($user->load(['roles', 'paymentDetail'])); // FIXED: Removed 'permissions'
+            } catch (\Exception $e) {
+                return response()->json(['error' => 'Failed to update user: ' . $e->getMessage()], 500);
+            }
+        })->middleware('permission:users.edit');
         
-        // ── Create a new role ──
+        Route::delete('/users/{user}', function (\App\Models\User $user) {
+            try {
+                $user->delete();
+                return response()->json(['message' => 'User deleted successfully']);
+            } catch (\Exception $e) {
+                return response()->json(['error' => 'Failed to delete user: ' . $e->getMessage()], 500);
+            }
+        })->middleware('permission:users.delete');
+
+        // ── Roles ── FIXED: Removed 'permissions' from eager load
+        Route::get('/roles', function () {
+    $roles = \Spatie\Permission\Models\Role::with('permissions')->get();
+    return response()->json($roles);
+});
+        
         Route::post('/roles', function (Request $request) {
             try {
                 $data = $request->validate([
@@ -240,7 +307,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
                 return response()->json([
                     'message' => 'Role created successfully',
-                    'role' => $role->load('permissions'),
+                    'role' => $role,
                 ], 201);
                 
             } catch (\Exception $e) {
@@ -250,7 +317,6 @@ Route::middleware('auth:sanctum')->group(function () {
             }
         })->middleware('permission:users.edit');
         
-        // Update role permissions
         Route::patch('/roles/{role}/permissions', function (Request $request, $roleId) {
             try {
                 $role = \Spatie\Permission\Models\Role::where('id', $roleId)
@@ -267,7 +333,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 
                 return response()->json([
                     'message' => 'Permissions updated successfully',
-                    'role' => $role->load('permissions'),
+                    'role' => $role,
                 ]);
                 
             } catch (\Exception $e) {
@@ -277,7 +343,6 @@ Route::middleware('auth:sanctum')->group(function () {
             }
         })->middleware('permission:users.edit');
         
-        // ── Delete a role (admin only) ──
         Route::delete('/roles/{role}', function ($roleId) {
             try {
                 $role = \Spatie\Permission\Models\Role::where('id', $roleId)
@@ -288,7 +353,6 @@ Route::middleware('auth:sanctum')->group(function () {
                     return response()->json(['error' => 'Role not found'], 404);
                 }
                 
-                // Check if role has users assigned
                 $userCount = \App\Models\User::whereHas('roles', function($q) use ($roleId) {
                     $q->where('role_id', $roleId);
                 })->count();
@@ -311,16 +375,6 @@ Route::middleware('auth:sanctum')->group(function () {
                 return response()->json([
                     'error' => 'Failed to delete role: ' . $e->getMessage(),
                 ], 500);
-            }
-        })->middleware('permission:users.delete');
-        
-        // Delete a user (admin only)
-        Route::delete('/users/{user}', function (\App\Models\User $user) {
-            try {
-                $user->delete();
-                return response()->json(['message' => 'User deleted successfully']);
-            } catch (\Exception $e) {
-                return response()->json(['error' => 'Failed to delete user: ' . $e->getMessage()], 500);
             }
         })->middleware('permission:users.delete');
     });

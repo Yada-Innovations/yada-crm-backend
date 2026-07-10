@@ -11,10 +11,25 @@ class RoleSeeder extends Seeder
     {
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // Define all modules with their permissions
         $modules = [
-            'leads', 'quotes', 'clients', 'subscriptions',
-            'tickets', 'feature_requests', 'invoices', 'users', 'analytics', 'services', 'work_done',
+            'leads', 
+            'quotes', 
+            'clients', 
+            'subscriptions',
+            'tickets', 
+            'feature_requests', 
+            'invoices', 
+         
+            'analytics', 
+            'services', 
+            'work_orders', // Changed from work_done
+            'payments',
+            'payroll',
+            'employees',
+            'procurement', // Commented out for now - add when ready
         ];
+        
         $actions = ['view', 'create', 'edit', 'delete'];
 
         // Create all permissions
@@ -37,14 +52,41 @@ class RoleSeeder extends Seeder
             'subscriptions.view',
             'analytics.view',
             'services.view', 'services.create', 'services.edit', 'services.delete',
+            'work_orders.view', 'work_orders.create', // Sales can view and create work orders
         ]);
 
-        // Support agent - no services permissions
+        // Support agent
         $support = Role::firstOrCreate(['name' => 'support_agent', 'guard_name' => 'web']);
         $support->syncPermissions([
             'tickets.view', 'tickets.create', 'tickets.edit',
             'feature_requests.view', 'feature_requests.create',
             'clients.view',
         ]);
+
+        // Optional: Create additional roles
+        /*
+        // Finance role
+        $finance = Role::firstOrCreate(['name' => 'finance', 'guard_name' => 'web']);
+        $finance->syncPermissions([
+            'invoices.view', 'invoices.create', 'invoices.edit',
+            'payments.view', 'payments.create', 'payments.edit',
+            'clients.view',
+            'analytics.view',
+        ]);
+
+        // HR role
+        $hr = Role::firstOrCreate(['name' => 'hr', 'guard_name' => 'web']);
+        $hr->syncPermissions([
+            'employees.view', 'employees.create', 'employees.edit',
+            'payroll.view', 'payroll.create', 'payroll.edit',
+            'users.view',
+        ]);
+
+        // Procurement role (when ready)
+        $procurement = Role::firstOrCreate(['name' => 'procurement', 'guard_name' => 'web']);
+        $procurement->syncPermissions([
+            'procurement.view', 'procurement.create', 'procurement.edit',
+        ]);
+        */
     }
 }

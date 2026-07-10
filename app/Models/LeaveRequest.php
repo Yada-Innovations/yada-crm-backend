@@ -1,38 +1,42 @@
 <?php
+
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class LeaveRequest extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
+
+    protected $keyType = 'string';
+    public $incrementing = false;
 
     protected $fillable = [
-        'employee_id', 'type', 'start_date', 'end_date', 'days',
-        'reason', 'status', 'notes', 'approved_by', 'approved_at',
-        'created_by',
+        'id',
+        'user_id',  // Changed from employee_id
+        'type',
+        'start_date',
+        'end_date',
+        'reason',
+        'days',
+        'status',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
-        'approved_at' => 'datetime',
-        'days' => 'decimal:2',
     ];
 
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    // For backward compatibility
     public function employee()
     {
-        return $this->belongsTo(Employee::class);
-    }
-
-    public function approver()
-    {
-        return $this->belongsTo(User::class, 'approved_by');
-    }
-
-    public function creator()
-    {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'user_id', 'id');
     }
 }

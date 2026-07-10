@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -8,15 +9,25 @@ class EmployeePaymentDetail extends Model
 {
     use HasUuids;
 
+    protected $keyType = 'string';
+    public $incrementing = false;
+
     protected $fillable = [
-        'employee_id', 'base_salary', 'housing_allowance', 'transport_allowance',
-        'medical_allowance', 'other_allowances', 'bonus', 'bank_name',
-        'bank_account', 'bank_branch', 'payroll_group', 'payment_frequency',
-        'custom_fields',
+        'id',
+        'user_id', // Already using user_id
+        'base_salary',
+        'housing_allowance',
+        'transport_allowance',
+        'medical_allowance',
+        'other_allowances',
+        'bonus',
+        'bank_name',
+        'bank_account',
+        'bank_branch',
+        'payment_frequency',
     ];
 
     protected $casts = [
-        'custom_fields' => 'array',
         'base_salary' => 'decimal:2',
         'housing_allowance' => 'decimal:2',
         'transport_allowance' => 'decimal:2',
@@ -25,15 +36,8 @@ class EmployeePaymentDetail extends Model
         'bonus' => 'decimal:2',
     ];
 
-    public function employee()
+    public function user()
     {
-        return $this->belongsTo(Employee::class);
-    }
-
-    public function getTotalCompensationAttribute()
-    {
-        return $this->base_salary + $this->housing_allowance +
-               $this->transport_allowance + $this->medical_allowance +
-               $this->other_allowances + $this->bonus;
+        return $this->belongsTo(User::class);
     }
 }

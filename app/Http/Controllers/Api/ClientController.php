@@ -18,14 +18,11 @@ class ClientController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:clients,email',
             'phone' => 'nullable|string|max:20',
-            'company_name' => 'required|string|max:255',
-            'company_phone' => 'nullable|string|max:20',
-            'company_email' => 'nullable|email|max:255',
+            'company' => 'required|string|max:255',
+            'industry' => 'nullable|string|max:255',
             'status' => ['nullable', Rule::in(['active', 'inactive', 'suspended'])],
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:255',
@@ -33,18 +30,21 @@ class ClientController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $data['id'] = (string) Str::uuid();
-        $data['status'] = $data['status'] ?? 'active';
+        $client = Client::create([
+            'id' => (string) Str::uuid(),
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
+            'company' => $data['company'],
+            'industry' => $data['industry'] ?? null,
+            'status' => $data['status'] ?? 'active',
+            'address' => $data['address'] ?? null,
+            'city' => $data['city'] ?? null,
+            'country' => $data['country'] ?? 'Kenya',
+            'notes' => $data['notes'] ?? null,
+        ]);
 
-        try {
-            $client = Client::create($data);
-            return response()->json($client, 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to create client',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json($client, 201);
     }
 
     public function show(Client $client)
@@ -55,14 +55,11 @@ class ClientController extends Controller
     public function update(Request $request, Client $client)
     {
         $data = $request->validate([
-            'first_name' => 'sometimes|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'sometimes|string|max:255',
+            'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|max:255|unique:clients,email,' . $client->id,
             'phone' => 'nullable|string|max:20',
-            'company_name' => 'sometimes|string|max:255',
-            'company_phone' => 'nullable|string|max:20',
-            'company_email' => 'nullable|email|max:255',
+            'company' => 'sometimes|string|max:255',
+            'industry' => 'nullable|string|max:255',
             'status' => ['nullable', Rule::in(['active', 'inactive', 'suspended'])],
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:255',
@@ -70,15 +67,20 @@ class ClientController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        try {
-            $client->update($data);
-            return response()->json($client);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to update client',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        $updateData = [];
+        if (isset($data['name'])) $updateData['name'] = $data['name'];
+        if (isset($data['email'])) $updateData['email'] = $data['email'];
+        if (isset($data['phone'])) $updateData['phone'] = $data['phone'];
+        if (isset($data['company'])) $updateData['company'] = $data['company'];
+        if (isset($data['industry'])) $updateData['industry'] = $data['industry'];
+        if (isset($data['status'])) $updateData['status'] = $data['status'];
+        if (isset($data['address'])) $updateData['address'] = $data['address'];
+        if (isset($data['city'])) $updateData['city'] = $data['city'];
+        if (isset($data['country'])) $updateData['country'] = $data['country'];
+        if (isset($data['notes'])) $updateData['notes'] = $data['notes'];
+
+        $client->update($updateData);
+        return response()->json($client);
     }
 
     public function destroy(Client $client)
