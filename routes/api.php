@@ -23,6 +23,8 @@ use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\EmployeeAgreementController;
 use App\Http\Controllers\Api\EmployeePaymentDetailController;
+use App\Http\Controllers\Api\ProcurementController;
+use App\Http\Controllers\Api\VaultController;
 
 // ── Public Routes ──
 Route::prefix('auth')->group(function () {
@@ -236,6 +238,44 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{payroll}', [PayrollController::class, 'destroy'])->middleware('permission:payroll.delete');
     });
 
+    // ── Procurement ──
+    Route::prefix('procurement')->group(function () {
+        // Vendors
+        Route::get('/vendors', [ProcurementController::class, 'vendorsIndex'])->middleware('permission:procurement.view');
+        Route::post('/vendors', [ProcurementController::class, 'vendorsStore'])->middleware('permission:procurement.create');
+        Route::get('/vendors/{vendor}', [ProcurementController::class, 'vendorsShow'])->middleware('permission:procurement.view');
+        Route::patch('/vendors/{vendor}', [ProcurementController::class, 'vendorsUpdate'])->middleware('permission:procurement.edit');
+        Route::delete('/vendors/{vendor}', [ProcurementController::class, 'vendorsDestroy'])->middleware('permission:procurement.delete');
+
+        // Requisitions
+        Route::get('/requisitions', [ProcurementController::class, 'requisitionsIndex'])->middleware('permission:procurement.view');
+        Route::post('/requisitions', [ProcurementController::class, 'requisitionsStore'])->middleware('permission:procurement.create');
+        Route::get('/requisitions/{requisition}', [ProcurementController::class, 'requisitionsShow'])->middleware('permission:procurement.view');
+        Route::patch('/requisitions/{requisition}', [ProcurementController::class, 'requisitionsUpdate'])->middleware('permission:procurement.edit');
+        Route::delete('/requisitions/{requisition}', [ProcurementController::class, 'requisitionsDestroy'])->middleware('permission:procurement.delete');
+        Route::post('/requisitions/{requisition}/approve', [ProcurementController::class, 'requisitionsApprove'])->middleware('permission:procurement.edit');
+        Route::post('/requisitions/{requisition}/reject', [ProcurementController::class, 'requisitionsReject'])->middleware('permission:procurement.edit');
+
+        // Purchases
+        Route::get('/purchases', [ProcurementController::class, 'purchasesIndex'])->middleware('permission:procurement.view');
+        Route::post('/purchases', [ProcurementController::class, 'purchasesStore'])->middleware('permission:procurement.create');
+        Route::get('/purchases/{purchase}', [ProcurementController::class, 'purchasesShow'])->middleware('permission:procurement.view');
+        Route::patch('/purchases/{purchase}', [ProcurementController::class, 'purchasesUpdate'])->middleware('permission:procurement.edit');
+        Route::delete('/purchases/{purchase}', [ProcurementController::class, 'purchasesDestroy'])->middleware('permission:procurement.delete');
+
+        // Stats
+        Route::get('/stats', [ProcurementController::class, 'stats'])->middleware('permission:procurement.view');
+    });
+
+    // ── Company Vault ──
+    Route::prefix('vault')->group(function () {
+        Route::get('/', [VaultController::class, 'index'])->middleware('permission:vault.view');
+        Route::post('/', [VaultController::class, 'store'])->middleware('permission:vault.create');
+        Route::get('/{vault}', [VaultController::class, 'show'])->middleware('permission:vault.view');
+        Route::patch('/{vault}', [VaultController::class, 'update'])->middleware('permission:vault.edit');
+        Route::delete('/{vault}', [VaultController::class, 'destroy'])->middleware('permission:vault.delete');
+    });
+
     // ── Admin Routes ──
     Route::middleware(['auth:sanctum', 'permission:users.view'])->prefix('admin')->group(function () {
         
@@ -280,9 +320,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // ── Roles ── FIXED: Removed 'permissions' from eager load
         Route::get('/roles', function () {
-    $roles = \Spatie\Permission\Models\Role::with('permissions')->get();
-    return response()->json($roles);
-});
+            $roles = \Spatie\Permission\Models\Role::with('permissions')->get();
+            return response()->json($roles);
+        });
         
         Route::post('/roles', function (Request $request) {
             try {
