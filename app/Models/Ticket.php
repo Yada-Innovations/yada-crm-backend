@@ -9,7 +9,7 @@ class Ticket extends Model
     use HasUuids;
 
     protected $fillable = [
-        'subject', 'description', 'client_id',
+        'ticket_number','subject', 'description', 'client_id',
         'assigned_to', 'created_by', 'status', 'priority',
     ];
 

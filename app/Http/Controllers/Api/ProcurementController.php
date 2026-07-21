@@ -41,6 +41,8 @@ class ProcurementController extends Controller
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:100',
+            'item_name' => 'nullable|string|max:255',
+            'item_cost' => 'nullable|numeric|min:0',
             'status' => 'nullable|in:active,inactive',
             'notes' => 'nullable|string',
         ]);
@@ -49,6 +51,7 @@ class ProcurementController extends Controller
             'id' => (string) Str::uuid(),
             ...$data,
             'status' => $data['status'] ?? 'active',
+            'item_cost' => $data['item_cost'] ?? 0,
             'created_by' => $request->user()->id,
         ]);
 
@@ -69,6 +72,8 @@ class ProcurementController extends Controller
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:100',
+            'item_name' => 'nullable|string|max:255',
+            'item_cost' => 'nullable|numeric|min:0',
             'status' => 'nullable|in:active,inactive',
             'notes' => 'nullable|string',
         ]);
@@ -87,7 +92,7 @@ class ProcurementController extends Controller
 
     public function requisitionsIndex(Request $request)
     {
-        $query = PurchaseRequisition::with(['requester', 'approver'])->latest();
+        $query = PurchaseRequisition::with(['requester', 'approver', 'vendor'])->latest();
 
         if ($request->status) {
             $query->where('status', $request->status);
@@ -102,13 +107,16 @@ class ProcurementController extends Controller
     public function requisitionsStore(Request $request)
     {
         $data = $request->validate([
+            'vendor_id' => 'required|exists:vendors,id',
             'department' => 'nullable|string|max:255',
-            'item_description' => 'required|string',
             'quantity' => 'nullable|integer|min:1',
-            'estimated_cost' => 'nullable|numeric|min:0',
             'justification' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
+
+        $vendor = Vendor::findOrFail($data['vendor_id']);
+        $quantity = $data['quantity'] ?? 1;
+        $estimatedCost = round((float) $vendor->item_cost * $quantity, 2);
 
         $number = 'REQ-' . str_pad((string) (PurchaseRequisition::count() + 1), 5, '0', STR_PAD_LEFT);
 
@@ -116,36 +124,47 @@ class ProcurementController extends Controller
             'id' => (string) Str::uuid(),
             'requisition_number' => $number,
             'requested_by' => $request->user()->id,
+            'vendor_id' => $vendor->id,
             'department' => $data['department'] ?? null,
-            'item_description' => $data['item_description'],
-            'quantity' => $data['quantity'] ?? 1,
-            'estimated_cost' => $data['estimated_cost'] ?? 0,
+            'item_description' => $vendor->item_name ?? $vendor->name,
+            'quantity' => $quantity,
+            'estimated_cost' => $estimatedCost,
             'justification' => $data['justification'] ?? null,
             'notes' => $data['notes'] ?? null,
             'status' => 'pending',
         ]);
 
-        return response()->json($requisition->load('requester'), 201);
+        return response()->json($requisition->load(['requester', 'vendor']), 201);
     }
 
     public function requisitionsShow(PurchaseRequisition $requisition)
     {
-        return response()->json($requisition->load(['requester', 'approver', 'purchases']));
+        return response()->json($requisition->load(['requester', 'approver', 'vendor', 'purchases']));
     }
 
     public function requisitionsUpdate(Request $request, PurchaseRequisition $requisition)
     {
         $data = $request->validate([
+            'vendor_id' => 'sometimes|exists:vendors,id',
             'department' => 'nullable|string|max:255',
-            'item_description' => 'sometimes|string',
             'quantity' => 'nullable|integer|min:1',
-            'estimated_cost' => 'nullable|numeric|min:0',
             'justification' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
+        $vendor = isset($data['vendor_id'])
+            ? Vendor::findOrFail($data['vendor_id'])
+            : $requisition->vendor;
+
+        $quantity = $data['quantity'] ?? $requisition->quantity;
+
+        if ($vendor) {
+            $data['item_description'] = $vendor->item_name ?? $vendor->name;
+            $data['estimated_cost'] = round((float) $vendor->item_cost * $quantity, 2);
+        }
+
         $requisition->update($data);
-        return response()->json($requisition->load(['requester', 'approver']));
+        return response()->json($requisition->load(['requester', 'approver', 'vendor']));
     }
 
     public function requisitionsDestroy(PurchaseRequisition $requisition)
@@ -171,7 +190,7 @@ class ProcurementController extends Controller
             'link' => "/procurement/requisitions/{$requisition->id}",
         ]);
 
-        return response()->json($requisition->load(['requester', 'approver']));
+        return response()->json($requisition->load(['requester', 'approver', 'vendor']));
     }
 
     public function requisitionsReject(Request $request, PurchaseRequisition $requisition)
@@ -196,7 +215,7 @@ class ProcurementController extends Controller
             'link' => "/procurement/requisitions/{$requisition->id}",
         ]);
 
-        return response()->json($requisition->load(['requester', 'approver']));
+        return response()->json($requisition->load(['requester', 'approver', 'vendor']));
     }
 
     // ═══════════════════ PURCHASES ═══════════════════
@@ -227,20 +246,27 @@ class ProcurementController extends Controller
     public function purchasesStore(Request $request)
     {
         $data = $request->validate([
-            'vendor_id' => 'nullable|exists:vendors,id',
-            'requisition_id' => 'nullable|exists:purchase_requisitions,id',
-            'item_description' => 'required|string',
-            'category' => 'nullable|string|max:100',
+            'requisition_id' => 'required|exists:purchase_requisitions,id',
             'quantity' => 'nullable|integer|min:1',
-            'unit_cost' => 'nullable|numeric|min:0',
             'purchase_date' => 'required|date',
+            'expected_delivery_date' => 'nullable|date|after_or_equal:purchase_date',
+            'reminder_date' => 'nullable|date|before_or_equal:expected_delivery_date',
             'payment_status' => 'nullable|in:pending,partial,paid',
             'status' => 'nullable|in:ordered,received,cancelled',
             'notes' => 'nullable|string',
         ]);
 
-        $quantity = $data['quantity'] ?? 1;
-        $unitCost = $data['unit_cost'] ?? 0;
+        $requisition = PurchaseRequisition::with('vendor')->findOrFail($data['requisition_id']);
+
+        if ($requisition->status !== 'approved') {
+            return response()->json([
+                'error' => 'Requisition must be approved before it can be purchased',
+            ], 422);
+        }
+
+        $vendor = $requisition->vendor;
+        $quantity = $data['quantity'] ?? $requisition->quantity;
+        $unitCost = $vendor->item_cost ?? 0;
         $totalCost = round($quantity * $unitCost, 2);
 
         $number = 'PO-' . str_pad((string) (Purchase::count() + 1), 5, '0', STR_PAD_LEFT);
@@ -248,24 +274,23 @@ class ProcurementController extends Controller
         $purchase = Purchase::create([
             'id' => (string) Str::uuid(),
             'purchase_number' => $number,
-            'vendor_id' => $data['vendor_id'] ?? null,
-            'requisition_id' => $data['requisition_id'] ?? null,
-            'item_description' => $data['item_description'],
-            'category' => $data['category'] ?? null,
+            'vendor_id' => $vendor->id,
+            'requisition_id' => $requisition->id,
+            'item_description' => $requisition->item_description,
+            'category' => $vendor->category,
             'quantity' => $quantity,
             'unit_cost' => $unitCost,
             'total_cost' => $totalCost,
             'purchase_date' => $data['purchase_date'],
+            'expected_delivery_date' => $data['expected_delivery_date'] ?? null,
+            'reminder_date' => $data['reminder_date'] ?? null,
             'payment_status' => $data['payment_status'] ?? 'pending',
             'status' => $data['status'] ?? 'ordered',
             'notes' => $data['notes'] ?? null,
             'created_by' => $request->user()->id,
         ]);
 
-        // If linked to a requisition, mark it converted
-        if (!empty($data['requisition_id'])) {
-            PurchaseRequisition::where('id', $data['requisition_id'])->update(['status' => 'converted']);
-        }
+        $requisition->update(['status' => 'converted']);
 
         return response()->json($purchase->load(['vendor', 'requisition']), 201);
     }
@@ -278,21 +303,17 @@ class ProcurementController extends Controller
     public function purchasesUpdate(Request $request, Purchase $purchase)
     {
         $data = $request->validate([
-            'vendor_id' => 'nullable|exists:vendors,id',
-            'item_description' => 'sometimes|string',
-            'category' => 'nullable|string|max:100',
             'quantity' => 'nullable|integer|min:1',
-            'unit_cost' => 'nullable|numeric|min:0',
             'purchase_date' => 'sometimes|date',
+            'expected_delivery_date' => 'nullable|date',
+            'reminder_date' => 'nullable|date',
             'payment_status' => 'nullable|in:pending,partial,paid',
             'status' => 'nullable|in:ordered,received,cancelled',
             'notes' => 'nullable|string',
         ]);
 
-        if (isset($data['quantity']) || isset($data['unit_cost'])) {
-            $quantity = $data['quantity'] ?? $purchase->quantity;
-            $unitCost = $data['unit_cost'] ?? $purchase->unit_cost;
-            $data['total_cost'] = round($quantity * $unitCost, 2);
+        if (isset($data['quantity'])) {
+            $data['total_cost'] = round($data['quantity'] * $purchase->unit_cost, 2);
         }
 
         $purchase->update($data);
@@ -319,6 +340,7 @@ class ProcurementController extends Controller
                 'pending' => PurchaseRequisition::where('status', 'pending')->count(),
                 'approved' => PurchaseRequisition::where('status', 'approved')->count(),
                 'rejected' => PurchaseRequisition::where('status', 'rejected')->count(),
+                'converted' => PurchaseRequisition::where('status', 'converted')->count(),
             ],
             'purchases' => [
                 'total' => Purchase::count(),

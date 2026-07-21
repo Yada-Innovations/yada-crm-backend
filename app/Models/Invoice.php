@@ -34,6 +34,9 @@ class Invoice extends Model
         'margin_pct',
         'etims_code',
         'etims_status',
+        'etims_error', 
+        'etims_synced_at', 
+        'etims_attempts',
         'created_by',
         // 'updated_by', // COMMENTED OUT - column doesn't exist in database
     ];
@@ -62,7 +65,7 @@ class Invoice extends Model
      */
     public function workOrder(): BelongsTo
     {
-        return $this->belongsTo(WorkDone::class, 'work_order_id');
+        return $this->belongsTo(WorkOrder::class, 'work_order_id');
     }
 
     /**

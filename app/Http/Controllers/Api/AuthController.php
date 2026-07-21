@@ -238,6 +238,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'first_name' => 'sometimes|string|max:255',
             'last_name' => 'sometimes|string|max:255',
+            'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => 'nullable|string|max:20',
             'department' => 'nullable|string|max:255',
             'position' => 'nullable|string|max:255',
@@ -261,6 +262,36 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Profile updated successfully',
+            'user' => $this->formatUserResponse($user),
+        ]);
+    }
+
+    /**
+     * Upload / replace profile avatar
+     */
+    public function uploadAvatar(Request $request)
+    {
+        $request->validate([
+            'avatar' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        $user = $request->user();
+
+        // Delete old avatar if one exists
+        if ($user->profile_picture) {
+            $oldPath = str_replace('/storage/', '', parse_url($user->profile_picture, PHP_URL_PATH) ?? '');
+            if ($oldPath && \Illuminate\Support\Facades\Storage::disk('public')->exists($oldPath)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
+            }
+        }
+
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $url = \Illuminate\Support\Facades\Storage::url($path);
+
+        $user->update(['profile_picture' => $url]);
+
+        return response()->json([
+            'message' => 'Avatar updated successfully',
             'user' => $this->formatUserResponse($user),
         ]);
     }

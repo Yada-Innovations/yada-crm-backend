@@ -2,7 +2,7 @@
 
 namespace App\Mail;
 
-use App\Models\WorkDone;
+use App\Models\WorkOrder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -17,7 +17,7 @@ class WorkOrderCreatedMail extends Mailable
     public $workOrder;
     public $client;
 
-    public function __construct(WorkDone $workOrder)
+    public function __construct(WorkOrder $workOrder)
     {
         $this->workOrder = $workOrder;
         $this->client = $workOrder->client;

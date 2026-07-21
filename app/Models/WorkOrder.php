@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
-class WorkDone extends Model
+class WorkOrder extends Model
 {
     use HasUuids;
 
@@ -15,6 +15,7 @@ class WorkDone extends Model
     protected $fillable = [
         'id',
         'client_id',
+        'quote_id',
         'lead_id',
         'title',
         'description',
@@ -33,6 +34,12 @@ class WorkDone extends Model
         'notes',
         'assigned_to',
         'created_by',
+        'technical_review_date',
+        'technical_review_notes',
+        'technical_review_approved',
+        'book_of_technical_reviews_date',
+        'book_of_technical_reviews_reference',
+        'technical_reviewer',
     ];
 
     protected $casts = [
@@ -44,6 +51,9 @@ class WorkDone extends Model
         'amount' => 'decimal:2',
         'tax_rate' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'technical_review_date' => 'date',
+        'technical_review_approved' => 'boolean',
+        'book_of_technical_reviews_date' => 'date',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -62,6 +72,11 @@ class WorkDone extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function quote(): BelongsTo
+    {
+        return $this->belongsTo(Quote::class);
     }
 
     public function lead(): BelongsTo

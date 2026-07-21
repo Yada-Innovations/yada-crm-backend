@@ -16,6 +16,7 @@ class PurchaseRequisition extends Model
         'id',
         'requisition_number',
         'requested_by',
+        'vendor_id',
         'department',
         'item_description',
         'quantity',
@@ -35,6 +36,11 @@ class PurchaseRequisition extends Model
     public function requester()
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function vendor()
+    {
+        return $this->belongsTo(Vendor::class);
     }
 
     public function approver()

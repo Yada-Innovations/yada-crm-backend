@@ -78,6 +78,9 @@ class QuoteController extends Controller
         // Generate UUID
         $validated['id'] = (string) Str::uuid();
 
+        // Generate quote number
+        $validated['quote_number'] = $this->generateQuoteNumber();
+
         try {
             $quote = Quote::create($validated);
 
@@ -273,5 +276,27 @@ class QuoteController extends Controller
             'message' => 'PDF generation not implemented yet',
             'quote' => $quote
         ]);
+    }
+
+    /**
+     * Generate a unique quote number: qt-YYYYMMDD-XXX
+     */
+    private function generateQuoteNumber(): string
+    {
+        $date = now()->format('Ymd');
+        $prefix = "qt-{$date}-";
+
+        $lastQuote = Quote::where('quote_number', 'like', $prefix . '%')
+            ->orderBy('quote_number', 'desc')
+            ->first();
+
+        if ($lastQuote) {
+            $lastSeq = (int) substr($lastQuote->quote_number, -3);
+            $newSeq = str_pad($lastSeq + 1, 3, '0', STR_PAD_LEFT);
+        } else {
+            $newSeq = '001';
+        }
+
+        return $prefix . $newSeq;
     }
 }

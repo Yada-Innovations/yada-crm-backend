@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Mail\WorkOrderCreatedMail;
-use App\Models\WorkDone;
+use App\Models\WorkOrder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,7 +21,7 @@ class SendWorkOrderCreatedEmail implements ShouldQueue
 
     protected $workOrder;
 
-    public function __construct(WorkDone $workOrder)
+    public function __construct(WorkOrder $workOrder)
     {
         $this->workOrder = $workOrder;
     }

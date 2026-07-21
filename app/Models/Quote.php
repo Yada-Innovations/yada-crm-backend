@@ -11,6 +11,7 @@ class Quote extends Model
     use HasUuids;
 
     protected $fillable = [
+        'quote_number',
         'id',
         'client_id',
         'service_id',

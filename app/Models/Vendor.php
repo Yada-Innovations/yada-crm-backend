@@ -20,14 +20,25 @@ class Vendor extends Model
         'phone',
         'address',
         'category',
+        'item_name',
+        'item_cost',
         'status',
         'notes',
         'created_by',
     ];
 
+    protected $casts = [
+        'item_cost' => 'decimal:2',
+    ];
+
     public function purchases()
     {
         return $this->hasMany(Purchase::class);
+    }
+
+    public function requisitions()
+    {
+        return $this->hasMany(PurchaseRequisition::class);
     }
 
     public function creator()
@@ -45,7 +56,8 @@ class Vendor extends Model
         return $query->where(function ($q) use ($search) {
             $q->where('name', 'LIKE', "%{$search}%")
               ->orWhere('contact_person', 'LIKE', "%{$search}%")
-              ->orWhere('email', 'LIKE', "%{$search}%");
+              ->orWhere('email', 'LIKE', "%{$search}%")
+              ->orWhere('item_name', 'LIKE', "%{$search}%");
         });
     }
 }

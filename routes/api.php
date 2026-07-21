@@ -16,7 +16,7 @@ use App\Http\Controllers\Api\CommunicationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\EmailTemplateController;
 use App\Http\Controllers\Api\EmployeeController;
-use App\Http\Controllers\Api\WorkDoneController;
+use App\Http\Controllers\Api\WorkOrderController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\LeaveRequestController;
@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\EmployeeAgreementController;
 use App\Http\Controllers\Api\EmployeePaymentDetailController;
 use App\Http\Controllers\Api\ProcurementController;
 use App\Http\Controllers\Api\VaultController;
+use App\Http\Controllers\Api\AccountingController;
 
 // ── Public Routes ──
 Route::prefix('auth')->group(function () {
@@ -41,6 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::patch('/auth/profile', [AuthController::class, 'updateProfile']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/auth/avatar', [AuthController::class, 'uploadAvatar']);
     Route::get('/auth/permissions', [AuthController::class, 'permissions']);
     Route::get('/auth/employees', [AuthController::class, 'getEmployees']);
     Route::get('/auth/stats', [AuthController::class, 'stats']);
@@ -102,6 +104,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{invoice}', [InvoiceController::class, 'update'])->middleware('permission:invoices.edit');
         Route::delete('/{invoice}', [InvoiceController::class, 'destroy'])->middleware('permission:invoices.delete');
         Route::post('/{invoice}/send-reminder', [InvoiceController::class, 'sendReminder'])->middleware('permission:invoices.edit');
+        Route::post('/{invoice}/retry-etims', [InvoiceController::class, 'retryEtims'])->middleware('permission:invoices.edit'); // <-- NEW eTIMS retry endpoint
         Route::get('/{invoice}/payments', [PaymentController::class, 'byInvoice'])->middleware('permission:invoices.view');
         Route::get('/stats', [InvoiceController::class, 'stats'])->middleware('permission:invoices.view');
     });
@@ -146,19 +149,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Work Orders ──
     Route::prefix('work-orders')->group(function () {
-        Route::get('/', [WorkDoneController::class, 'index'])->middleware('permission:work_orders.view');
-        Route::post('/', [WorkDoneController::class, 'store'])->middleware('permission:work_orders.create');
-        Route::get('/stats', [WorkDoneController::class, 'stats'])->middleware('permission:work_orders.view');
-        Route::get('/recent', [WorkDoneController::class, 'recent'])->middleware('permission:work_orders.view');
-        Route::get('/client/{clientId}', [WorkDoneController::class, 'byClient'])->middleware('permission:work_orders.view');
-        Route::get('/status/{status}', [WorkDoneController::class, 'byStatus'])->middleware('permission:work_orders.view');
-        Route::post('/date-range', [WorkDoneController::class, 'byDateRange'])->middleware('permission:work_orders.view');
-        Route::post('/bulk-status', [WorkDoneController::class, 'bulkUpdateStatus'])->middleware('permission:work_orders.edit');
-        Route::get('/{workOrder}', [WorkDoneController::class, 'show'])->middleware('permission:work_orders.view');
-        Route::patch('/{workOrder}', [WorkDoneController::class, 'update'])->middleware('permission:work_orders.edit');
-        Route::patch('/{workOrder}/status', [WorkDoneController::class, 'updateStatus'])->middleware('permission:work_orders.edit');
-        Route::post('/{workOrder}/invoice', [WorkDoneController::class, 'createInvoice'])->middleware('permission:work_orders.edit');
-        Route::delete('/{workOrder}', [WorkDoneController::class, 'destroy'])->middleware('permission:work_orders.delete');
+        Route::get('/', [WorkOrderController::class, 'index'])->middleware('permission:work_orders.view');
+        Route::post('/', [WorkOrderController::class, 'store'])->middleware('permission:work_orders.create');
+        Route::get('/stats', [WorkOrderController::class, 'stats'])->middleware('permission:work_orders.view');
+        Route::get('/recent', [WorkOrderController::class, 'recent'])->middleware('permission:work_orders.view');
+        Route::get('/client/{clientId}', [WorkOrderController::class, 'byClient'])->middleware('permission:work_orders.view');
+        Route::get('/status/{status}', [WorkOrderController::class, 'byStatus'])->middleware('permission:work_orders.view');
+        Route::post('/date-range', [WorkOrderController::class, 'byDateRange'])->middleware('permission:work_orders.view');
+        Route::post('/bulk-status', [WorkOrderController::class, 'bulkUpdateStatus'])->middleware('permission:work_orders.edit');
+        Route::get('/{workOrder}', [WorkOrderController::class, 'show'])->middleware('permission:work_orders.view');
+        Route::patch('/{workOrder}', [WorkOrderController::class, 'update'])->middleware('permission:work_orders.edit');
+        Route::patch('/{workOrder}/status', [WorkOrderController::class, 'updateStatus'])->middleware('permission:work_orders.edit');
+        Route::post('/{workOrder}/invoice', [WorkOrderController::class, 'createInvoice'])->middleware('permission:work_orders.edit');
+        Route::delete('/{workOrder}', [WorkOrderController::class, 'destroy'])->middleware('permission:work_orders.delete');
     });
 
     // ── Email Templates ──
@@ -276,10 +279,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{vault}', [VaultController::class, 'destroy'])->middleware('permission:vault.delete');
     });
 
+    // ── Accounting ──
+    Route::prefix('accounting')->group(function () {
+        Route::get('/ledger', [AccountingController::class, 'ledger'])->middleware('permission:accounting.view');
+        Route::get('/summary', [AccountingController::class, 'summary'])->middleware('permission:accounting.view');
+        Route::post('/entries', [AccountingController::class, 'store'])->middleware('permission:accounting.create');
+        Route::patch('/entries/{entry}', [AccountingController::class, 'update'])->middleware('permission:accounting.edit');
+        Route::delete('/entries/{entry}', [AccountingController::class, 'destroy'])->middleware('permission:accounting.delete');
+    });
+
     // ── Admin Routes ──
     Route::middleware(['auth:sanctum', 'permission:users.view'])->prefix('admin')->group(function () {
         
-        // ── Users (Admin only) ── FIXED: Removed 'permissions' from eager load
+        // ── Users (Admin only) ──
         Route::get('/users', function () {
             $users = \App\Models\User::with(['roles', 'paymentDetail'])->get();
             return response()->json($users);
@@ -303,7 +315,7 @@ Route::middleware('auth:sanctum')->group(function () {
                     $user->syncRoles([$data['role']]);
                 }
 
-                return response()->json($user->load(['roles', 'paymentDetail'])); // FIXED: Removed 'permissions'
+                return response()->json($user->load(['roles', 'paymentDetail']));
             } catch (\Exception $e) {
                 return response()->json(['error' => 'Failed to update user: ' . $e->getMessage()], 500);
             }
@@ -318,7 +330,7 @@ Route::middleware('auth:sanctum')->group(function () {
             }
         })->middleware('permission:users.delete');
 
-        // ── Roles ── FIXED: Removed 'permissions' from eager load
+        // ── Roles ──
         Route::get('/roles', function () {
             $roles = \Spatie\Permission\Models\Role::with('permissions')->get();
             return response()->json($roles);

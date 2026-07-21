@@ -2,11 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
+    use HasUuids; // Auto‑generates UUID for primary key
+
+    public $incrementing = false;
+    protected $keyType = 'string';
+
     protected $fillable = [
         'invoice_id',
         'amount',

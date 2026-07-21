@@ -23,6 +23,8 @@ class Purchase extends Model
         'unit_cost',
         'total_cost',
         'purchase_date',
+        'expected_delivery_date',
+        'reminder_date',
         'payment_status',
         'status',
         'notes',
@@ -33,6 +35,8 @@ class Purchase extends Model
         'unit_cost' => 'decimal:2',
         'total_cost' => 'decimal:2',
         'purchase_date' => 'date',
+        'expected_delivery_date' => 'date',
+        'reminder_date' => 'date',
     ];
 
     public function vendor()

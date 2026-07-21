@@ -2,22 +2,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Employee;
+use App\Models\User;
 use App\Models\Payroll;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class PayrollController extends Controller
 {
-    // ── Tax calculation for Kenya (2026) ──
     private function calculateTax($grossPay)
     {
-        // Simplified Kenyan PAYE rates (2026)
-        // Personal relief: KES 2,400 per month
         $personalRelief = 2400;
-        
+
         if ($grossPay <= 24000) {
             $tax = 0;
         } elseif ($grossPay <= 32333) {
@@ -31,35 +29,72 @@ class PayrollController extends Controller
         } else {
             $tax = 5833.3 + ($grossPay - 57333) * 0.30;
         }
-        
+
         return max(0, $tax - $personalRelief);
     }
 
-    // ── NSSF calculation (Kenya 2026) ──
     private function calculateNSSF($grossPay)
     {
-        // Tier I: Up to 18,000 KES at 6%
-        // Tier II: 18,001 - 36,000 KES at 6%
         $tier1 = min($grossPay, 18000) * 0.06;
         $tier2 = max(0, min($grossPay - 18000, 18000)) * 0.06;
         return round($tier1 + $tier2, 2);
     }
 
-    // ── AHL calculation (Kenya 2026) ──
     private function calculateAHL($grossPay)
     {
-        // Affordable Housing Levy: 1.5% of gross pay
         return round($grossPay * 0.015, 2);
     }
 
-    // ── Get payroll listing ──
+    /**
+     * Resolve a user by id, employee_id, or email (fallback).
+     */
+    private function resolveUser($identifier): ?User
+    {
+        // First try direct match on id or employee_id
+        $user = User::with('paymentDetail')
+            ->where('id', $identifier)
+            ->orWhere('employee_id', $identifier)
+            ->first();
+
+        if ($user) {
+            return $user;
+        }
+
+        // If identifier is numeric, try casting to integer
+        if (is_numeric($identifier)) {
+            $user = User::where('id', (int) $identifier)->first();
+            if ($user) return $user;
+        }
+
+        // If identifier looks like a UUID, try that (if your model uses uuid column)
+        if (Str::isUuid($identifier)) {
+            $user = User::where('uuid', $identifier)->first();
+            if ($user) return $user;
+        }
+
+        // Fallback: try by email (if someone passes an email)
+        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            $user = User::where('email', $identifier)->first();
+            if ($user) return $user;
+        }
+
+        return null;
+    }
+
     public function index(Request $request)
     {
         try {
             $query = Payroll::with(['employee', 'creator'])->latest();
 
             if ($request->employee_id) {
-                $query->where('employee_id', $request->employee_id);
+                $userIds = User::where('id', $request->employee_id)
+                    ->orWhere('employee_id', $request->employee_id)
+                    ->pluck('id');
+                if ($userIds->isNotEmpty()) {
+                    $query->whereIn('employee_id', $userIds);
+                } else {
+                    return response()->json([]);
+                }
             }
 
             if ($request->status) {
@@ -68,42 +103,41 @@ class PayrollController extends Controller
 
             return response()->json($query->limit(100)->get());
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to fetch payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to fetch payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Calculate payroll for an employee ──
     public function calculate($employeeId)
     {
         try {
-            $employee = Employee::with('paymentDetail')->findOrFail($employeeId);
+            $employee = $this->resolveUser($employeeId);
+            if (!$employee) {
+                Log::error("Payroll calculate: Employee not found for identifier '$employeeId'");
+                return response()->json(['error' => 'Employee not found'], 404);
+            }
+
             $payment = $employee->paymentDetail;
-            
             if (!$payment) {
                 return response()->json(['error' => 'Employee has no payment details'], 422);
             }
 
             $basic = $payment->base_salary ?? 0;
-            $allowances = ($payment->housing_allowance ?? 0) + ($payment->transport_allowance ?? 0) + 
+            $allowances = ($payment->housing_allowance ?? 0) + ($payment->transport_allowance ?? 0) +
                           ($payment->medical_allowance ?? 0) + ($payment->other_allowances ?? 0);
             $bonus = $payment->bonus ?? 0;
-            
+
             $grossPay = $basic + $allowances + $bonus;
-            
-            // Calculate deductions
+
             $tax = $this->calculateTax($grossPay);
             $nssfEmployee = $this->calculateNSSF($grossPay);
-            $nssfEmployer = $nssfEmployee; // Employer matches employee contribution
+            $nssfEmployer = $nssfEmployee;
             $ahl = $this->calculateAHL($grossPay);
-            
+
             $netPay = $grossPay - $tax - $nssfEmployee - $ahl;
             $employerCost = $grossPay + $nssfEmployer;
 
             return response()->json([
-                'employee' => $employee->first_name . ' ' . $employee->last_name,
+                'employee' => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')) ?: $employee->name,
                 'employee_id' => $employee->id,
                 'basic_salary' => $basic,
                 'allowances' => $allowances,
@@ -117,32 +151,34 @@ class PayrollController extends Controller
                 'employer_cost' => round($employerCost, 2),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to calculate payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            Log::error('Payroll calculation error: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to calculate payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Generate a new payroll ──
     public function generate(Request $request)
     {
         try {
             $data = $request->validate([
-                'employee_id' => 'required|exists:employees,id',
+                'employee_id' => 'required|string',
                 'period_start' => 'required|date',
                 'period_end' => 'required|date|after:period_start',
                 'period' => 'nullable|string',
             ]);
 
-            $employee = Employee::with('paymentDetail')->findOrFail($data['employee_id']);
+            Log::info('Payroll generate received employee_id: ' . $data['employee_id']);
+
+            $employee = $this->resolveUser($data['employee_id']);
+            if (!$employee) {
+                Log::error("Payroll generate: Employee not found for identifier '$data[employee_id]'");
+                return response()->json(['error' => 'Employee not found'], 404);
+            }
+
             $payment = $employee->paymentDetail;
-            
             if (!$payment) {
                 return response()->json(['error' => 'Employee has no payment details'], 422);
             }
 
-            // Check if payroll already exists for this period
             $period = $data['period'] ?? Carbon::parse($data['period_start'])->format('F Y');
             $existing = Payroll::where('employee_id', $employee->id)
                 ->where('period', $period)
@@ -152,13 +188,12 @@ class PayrollController extends Controller
                 return response()->json(['error' => 'Payroll already exists for this period'], 422);
             }
 
-            // Calculate payroll
             $basic = $payment->base_salary ?? 0;
-            $allowances = ($payment->housing_allowance ?? 0) + ($payment->transport_allowance ?? 0) + 
+            $allowances = ($payment->housing_allowance ?? 0) + ($payment->transport_allowance ?? 0) +
                           ($payment->medical_allowance ?? 0) + ($payment->other_allowances ?? 0);
             $bonus = $payment->bonus ?? 0;
             $grossPay = $basic + $allowances + $bonus;
-            
+
             $tax = $this->calculateTax($grossPay);
             $nssfEmployee = $this->calculateNSSF($grossPay);
             $nssfEmployer = $nssfEmployee;
@@ -166,7 +201,6 @@ class PayrollController extends Controller
             $netPay = $grossPay - $tax - $nssfEmployee - $ahl;
             $employerCost = $grossPay + $nssfEmployer;
 
-            // Create payroll record
             $payroll = Payroll::create([
                 'id' => (string) Str::uuid(),
                 'employee_id' => $employee->id,
@@ -192,29 +226,22 @@ class PayrollController extends Controller
             ]);
 
             return response()->json($payroll->load(['employee', 'creator']), 201);
-            
+
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to generate payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            Log::error('Payroll generate error: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to generate payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Get single payroll ──
     public function show(Payroll $payroll)
     {
         try {
             return response()->json($payroll->load(['employee', 'creator', 'employee.paymentDetail']));
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to fetch payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to fetch payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Update payroll ──
     public function update(Request $request, Payroll $payroll)
     {
         try {
@@ -227,105 +254,84 @@ class PayrollController extends Controller
                 'status' => ['nullable', Rule::in(['draft', 'approved', 'paid'])],
             ]);
 
-            // If status is being changed to paid, set paid_at
             if (isset($data['status']) && $data['status'] === 'paid' && $payroll->status !== 'paid') {
                 $data['paid_at'] = now();
             }
 
-            // If gross_pay or deductions are updated, recalculate net_pay
-            if (isset($data['gross_pay']) || isset($data['tax_paye']) || 
+            if (isset($data['gross_pay']) || isset($data['tax_paye']) ||
                 isset($data['nssf_employee']) || isset($data['ahl'])) {
-                
+
                 $grossPay = $data['gross_pay'] ?? $payroll->gross_pay;
                 $taxPaye = $data['tax_paye'] ?? $payroll->tax_paye;
                 $nssf = $data['nssf_employee'] ?? $payroll->nssf_employee;
                 $ahl = $data['ahl'] ?? $payroll->ahl;
-                
+
                 $data['net_pay'] = $grossPay - $taxPaye - $nssf - $ahl;
                 $data['employer_cost'] = $grossPay + $nssf;
             }
 
             $payroll->update($data);
-            
+
             return response()->json($payroll->load(['employee', 'creator']));
-            
+
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to update payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to update payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Approve payroll ──
     public function approve(Payroll $payroll)
     {
         try {
             if ($payroll->status === 'paid') {
                 return response()->json(['error' => 'Cannot approve a paid payroll'], 422);
             }
-            
+
             $payroll->update(['status' => 'approved']);
             return response()->json($payroll->load(['employee', 'creator']));
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to approve payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to approve payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Mark payroll as paid ──
     public function markPaid(Payroll $payroll)
     {
         try {
             if ($payroll->status === 'paid') {
                 return response()->json(['error' => 'Payroll is already marked as paid'], 422);
             }
-            
+
             $payroll->update([
                 'status' => 'paid',
                 'paid_at' => now(),
             ]);
-            
+
             return response()->json($payroll->load(['employee', 'creator']));
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to mark payroll as paid',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to mark payroll as paid', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Delete payroll ──
     public function destroy(Payroll $payroll)
     {
         try {
-            // Check if payroll is already paid
             if ($payroll->status === 'paid') {
-                return response()->json([
-                    'error' => 'Cannot delete a payroll that has been marked as paid'
-                ], 422);
+                return response()->json(['error' => 'Cannot delete a payroll that has been marked as paid'], 422);
             }
-            
+
             $payroll->delete();
             return response()->json(['message' => 'Payroll deleted successfully']);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to delete payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to delete payroll', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Get payroll summary ──
     public function summary(Request $request)
     {
         try {
             $period = $request->get('period', Carbon::now()->format('F Y'));
-            
+
             $payrolls = Payroll::where('period', $period)->get();
-            
+
             return response()->json([
                 'period' => $period,
                 'total_employees' => $payrolls->count(),
@@ -338,14 +344,10 @@ class PayrollController extends Controller
                 'payrolls' => $payrolls->load('employee'),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to fetch summary',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to fetch summary', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Get payroll statistics ──
     public function stats()
     {
         try {
@@ -360,20 +362,16 @@ class PayrollController extends Controller
             ];
             return response()->json($stats);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to fetch stats',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to fetch stats', 'message' => $e->getMessage()], 500);
         }
     }
 
-    // ── Bulk generate payroll ──
     public function bulkGenerate(Request $request)
     {
         try {
             $data = $request->validate([
                 'employee_ids' => 'required|array|min:1',
-                'employee_ids.*' => 'exists:employees,id',
+                'employee_ids.*' => 'string',
                 'period_start' => 'required|date',
                 'period_end' => 'required|date|after:period_start',
             ]);
@@ -381,11 +379,15 @@ class PayrollController extends Controller
             $results = [];
             $errors = [];
 
-            foreach ($data['employee_ids'] as $employeeId) {
+            foreach ($data['employee_ids'] as $identifier) {
                 try {
-                    $employee = Employee::with('paymentDetail')->findOrFail($employeeId);
+                    $employee = $this->resolveUser($identifier);
+                    if (!$employee) {
+                        $errors[] = "Employee with identifier '$identifier' not found";
+                        continue;
+                    }
+
                     $payment = $employee->paymentDetail;
-                    
                     if (!$payment) {
                         $errors[] = "Employee {$employee->first_name} {$employee->last_name} has no payment details";
                         continue;
@@ -401,13 +403,12 @@ class PayrollController extends Controller
                         continue;
                     }
 
-                    // Calculate payroll
                     $basic = $payment->base_salary ?? 0;
-                    $allowances = ($payment->housing_allowance ?? 0) + ($payment->transport_allowance ?? 0) + 
+                    $allowances = ($payment->housing_allowance ?? 0) + ($payment->transport_allowance ?? 0) +
                                   ($payment->medical_allowance ?? 0) + ($payment->other_allowances ?? 0);
                     $bonus = $payment->bonus ?? 0;
                     $grossPay = $basic + $allowances + $bonus;
-                    
+
                     $tax = $this->calculateTax($grossPay);
                     $nssfEmployee = $this->calculateNSSF($grossPay);
                     $nssfEmployer = $nssfEmployee;
@@ -415,7 +416,6 @@ class PayrollController extends Controller
                     $netPay = $grossPay - $tax - $nssfEmployee - $ahl;
                     $employerCost = $grossPay + $nssfEmployer;
 
-                    // Create payroll record
                     $payroll = Payroll::create([
                         'id' => (string) Str::uuid(),
                         'employee_id' => $employee->id,
@@ -441,9 +441,9 @@ class PayrollController extends Controller
                     ]);
 
                     $results[] = $payroll->load('employee');
-                    
+
                 } catch (\Exception $e) {
-                    $errors[] = "Error for employee ID {$employeeId}: " . $e->getMessage();
+                    $errors[] = "Error for identifier '$identifier': " . $e->getMessage();
                 }
             }
 
@@ -455,10 +455,7 @@ class PayrollController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to bulk generate payroll',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Failed to bulk generate payroll', 'message' => $e->getMessage()], 500);
         }
     }
 }

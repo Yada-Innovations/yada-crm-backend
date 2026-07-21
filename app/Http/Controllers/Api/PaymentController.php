@@ -13,13 +13,15 @@ use Illuminate\Validation\Rule;
 class PaymentController extends Controller
 {
     /**
-     * Get all payments
+     * Get all payments (paginated)
      */
-    public function index()
+    public function index(Request $request)
     {
+        $perPage = $request->input('per_page', 20);
+        
         $payments = Payment::with(['invoice', 'invoice.client', 'createdBy'])
             ->latest()
-            ->get();
+            ->paginate($perPage);
         
         return response()->json($payments);
     }

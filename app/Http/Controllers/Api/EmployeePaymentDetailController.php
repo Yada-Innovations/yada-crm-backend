@@ -11,7 +11,7 @@ class EmployeePaymentDetailController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
+            'user_id' => 'required|exists:users,id',
             'base_salary' => 'required|numeric|min:0',
             'housing_allowance' => 'nullable|numeric|min:0',
             'transport_allowance' => 'nullable|numeric|min:0',
@@ -25,7 +25,7 @@ class EmployeePaymentDetailController extends Controller
         ]);
 
         // Check if payment details already exist
-        $existing = EmployeePaymentDetail::where('employee_id', $data['employee_id'])->first();
+        $existing = EmployeePaymentDetail::where('user_id', $data['user_id'])->first();
         if ($existing) {
             $existing->update($data);
             return response()->json(['message' => 'Payment details updated successfully', 'payment' => $existing]);
@@ -55,9 +55,9 @@ class EmployeePaymentDetailController extends Controller
         return response()->json(['message' => 'Payment details updated successfully', 'payment' => $payment]);
     }
 
-    public function show($employeeId)
+    public function show($userId)
     {
-        $payment = EmployeePaymentDetail::where('employee_id', $employeeId)->first();
+        $payment = EmployeePaymentDetail::where('user_id', $userId)->first();
         if (!$payment) {
             return response()->json(['message' => 'No payment details found'], 404);
         }
