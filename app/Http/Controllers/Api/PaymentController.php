@@ -81,6 +81,38 @@ class PaymentController extends Controller
             $invoice->update(['status' => 'partial']);
         }
 
+        // --- Double Entry Ledger ---
+        $cashAccount = \App\Models\ChartOfAccount::where('code', '1000')->first(); // Cash
+        $arAccount = \App\Models\ChartOfAccount::where('code', '1100')->first(); // Accounts Receivable
+
+        if ($cashAccount && $arAccount) {
+            $transactionGroupId = \Illuminate\Support\Str::uuid();
+
+            // Debit Cash
+            \App\Models\Ledger::create([
+                'chart_of_account_id' => $cashAccount->id,
+                'transaction_group_id' => $transactionGroupId,
+                'type' => 'debit',
+                'amount' => $data['amount'],
+                'entry_date' => $data['payment_date'],
+                'reference_type' => Payment::class,
+                'reference_id' => $payment->id,
+                'description' => 'Payment received for Invoice ' . $invoice->invoice_number,
+            ]);
+
+            // Credit Accounts Receivable
+            \App\Models\Ledger::create([
+                'chart_of_account_id' => $arAccount->id,
+                'transaction_group_id' => $transactionGroupId,
+                'type' => 'credit',
+                'amount' => $data['amount'],
+                'entry_date' => $data['payment_date'],
+                'reference_type' => Payment::class,
+                'reference_id' => $payment->id,
+                'description' => 'Payment received for Invoice ' . $invoice->invoice_number,
+            ]);
+        }
+
         // Load relationships for response
         $payment->load(['invoice', 'invoice.client', 'createdBy']);
 

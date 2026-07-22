@@ -281,11 +281,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Accounting ──
     Route::prefix('accounting')->group(function () {
-        Route::get('/ledger', [AccountingController::class, 'ledger'])->middleware('permission:accounting.view');
-        Route::get('/summary', [AccountingController::class, 'summary'])->middleware('permission:accounting.view');
-        Route::post('/entries', [AccountingController::class, 'store'])->middleware('permission:accounting.create');
-        Route::patch('/entries/{entry}', [AccountingController::class, 'update'])->middleware('permission:accounting.edit');
-        Route::delete('/entries/{entry}', [AccountingController::class, 'destroy'])->middleware('permission:accounting.delete');
+        Route::get('/overview', [AccountingController::class, 'overview'])->middleware('permission:accounting.view');
+        Route::get('/chart-of-accounts', [AccountingController::class, 'chartOfAccounts'])->middleware('permission:accounting.view');
+        Route::post('/chart-of-accounts', [AccountingController::class, 'storeChartOfAccount'])->middleware('permission:accounting.create');
+        Route::get('/ledgers', [AccountingController::class, 'ledgers'])->middleware('permission:accounting.view');
+        Route::post('/ledgers', [AccountingController::class, 'storeLedger'])->middleware('permission:accounting.create');
+        Route::put('/ledgers/{transactionGroupId}', [AccountingController::class, 'updateLedger'])->middleware('permission:accounting.edit');
+        Route::delete('/ledgers/{transactionGroupId}', [AccountingController::class, 'destroyLedger'])->middleware('permission:accounting.delete');
+        Route::get('/income-statement', [AccountingController::class, 'incomeStatement'])->middleware('permission:accounting.view');
+        Route::get('/balance-sheet', [AccountingController::class, 'balanceSheet'])->middleware('permission:accounting.view');
     });
 
     // ── Admin Routes ──
