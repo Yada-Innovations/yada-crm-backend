@@ -35,6 +35,7 @@ class RoleSeeder extends Seeder
             'roles',
             'procurement',
             'accounting', // Reserved for future use
+            'vault',
         ];
 
         $actions = ['view', 'create', 'edit', 'delete'];
