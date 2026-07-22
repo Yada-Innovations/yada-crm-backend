@@ -22,6 +22,10 @@ class SubscriptionController extends Controller
             'plan_id'    => 'required|exists:subscription_plans,id',
             'starts_at'  => 'required|date',
             'ends_at'    => 'required|date|after:starts_at',
+            'seats_used' => 'nullable|integer|min:0',
+            'status'     => 'nullable|in:active,expired,cancelled',
+            'price'      => 'nullable|numeric|min:0',
+            'renewal_alert_sent' => 'nullable|boolean',
         ]);
         $subscription = Subscription::create($data);
         return response()->json($subscription->load(['client','plan']), 201);
@@ -33,8 +37,14 @@ class SubscriptionController extends Controller
 
     public function update(Request $request, Subscription $subscription) {
         $data = $request->validate([
+            'client_id'  => 'sometimes|exists:clients,id',
+            'plan_id'    => 'sometimes|exists:subscription_plans,id',
+            'starts_at'  => 'sometimes|date',
+            'ends_at'    => 'sometimes|date|after:starts_at',
             'seats_used' => 'sometimes|integer|min:0',
             'status'     => 'sometimes|in:active,expired,cancelled',
+            'price'      => 'nullable|numeric|min:0',
+            'renewal_alert_sent' => 'sometimes|boolean',
         ]);
         $subscription->update($data);
         return response()->json($subscription);

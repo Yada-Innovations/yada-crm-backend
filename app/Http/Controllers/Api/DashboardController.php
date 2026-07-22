@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
 use App\Models\Client;
+use App\Models\Ticket;
+use App\Models\Subscription;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -36,14 +38,36 @@ class DashboardController extends Controller
                 ];
             }
 
+            // Get open tickets
+            $openTickets = Ticket::whereNotIn('status', ['closed', 'resolved'])->count();
+
+            // Get renewals due in the next 30 days
+            $renewalsDue = Subscription::where('status', 'active')
+                ->where('ends_at', '<=', now()->addDays(30))
+                ->count();
+
+            // Calculate MRR
+            $mrr = 0;
+            $activeSubscriptions = Subscription::with('plan')->where('status', 'active')->get();
+            foreach ($activeSubscriptions as $sub) {
+                if ($sub->plan) {
+                    if (in_array(strtolower($sub->plan->billing_cycle), ['yearly', 'annual', 'annually'])) {
+                        $mrr += $sub->plan->price / 12;
+                    } else {
+                        $mrr += $sub->plan->price;
+                    }
+                }
+            }
+            $arr = $mrr * 12;
+
             // Build response
             $data = [
                 'total_leads' => $totalLeads,
                 'active_clients' => $activeClients,
-                'open_tickets' => 0,
-                'renewals_due' => 0,
-                'mrr' => 0,
-                'arr' => 0,
+                'open_tickets' => $openTickets,
+                'renewals_due' => $renewalsDue,
+                'mrr' => round($mrr, 2),
+                'arr' => round($arr, 2),
                 'leads_by_stage' => $leadsByStatus,
                 'recent_activity' => $recentActivity,
             ];

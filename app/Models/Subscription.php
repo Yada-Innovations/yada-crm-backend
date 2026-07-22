@@ -10,7 +10,7 @@ class Subscription extends Model
 
     protected $fillable = [
         'client_id', 'plan_id', 'seats_used',
-        'status', 'starts_at', 'ends_at', 'renewal_alert_sent',
+        'status', 'starts_at', 'ends_at', 'renewal_alert_sent', 'price'
     ];
 
     protected $casts = ['renewal_alert_sent' => 'boolean'];
